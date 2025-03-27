@@ -1,18 +1,22 @@
 mod board;
-mod pieces;
 mod board_position_lookup;
+mod pieces;
 
 use bevy::{prelude::*, window::PrimaryWindow};
-use board_position_lookup::LOOKUP;
 use board::Board;
+use board_position_lookup::LOOKUP;
 
 #[derive(Component)]
 struct PieceTag;
 
-#[derive(Resource, Default)]
+struct SelectedPieceData {
+  entity: Entity,
+  original_translation: Vec3,
+}
+
+#[derive(Resource)]
 struct SelectedPiece {
-  entity: Option<Entity>,
-  original_position: Option<Vec3>,
+  data: Option<SelectedPieceData>,
 }
 
 fn main() {
@@ -37,7 +41,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
   commands.spawn(Camera2d);
   commands.spawn(Sprite::from_image(asset_server.load("board.png")));
   commands.insert_resource(Board::default());
-  commands.insert_resource(SelectedPiece::default());
+  commands.insert_resource(SelectedPiece { data: None });
 }
 
 fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
@@ -131,45 +135,45 @@ fn detect_piece(
   mouse: Res<ButtonInput<MouseButton>>,
   mut selected_piece: ResMut<SelectedPiece>,
 ) {
-  let Some(cursor_position) = window.single().cursor_position() else { return };
-  let resolution = &window.single().resolution;
-
-  //goes from 0 to width / height
+  let Some(cursor_position) = window.single().cursor_position() else {
+    return;
+  };
+  //goes from 0 to width or height
   let x = cursor_position.x;
   let y = cursor_position.y;
-
+  
+  let resolution = &window.single().resolution;
+  
   let just_pressed = mouse.just_pressed(MouseButton::Left);
   let being_pressed = mouse.pressed(MouseButton::Left);
   let just_released = mouse.just_released(MouseButton::Left);
-
-  match selected_piece.entity {
-    Some(entity) if being_pressed => {
-      if let Ok((_, _, mut transform)) = pieces.get_mut(entity) {
+  
+  match &mut selected_piece.data {
+    Some(data) if being_pressed => {
+      if let Ok((_, _, mut transform)) = pieces.get_mut(data.entity) {
         transform.translation.x = cursor_position.x - resolution.width() / 2.0;
         transform.translation.y = resolution.height() / 2.0 - cursor_position.y;
         transform.translation.z = 1.0;
       }
-    },
-    Some(entity) if just_released => {
-      if let Ok((_, _, mut transform)) = pieces.get_mut(entity) {
-        transform.translation = selected_piece.original_position.unwrap();
+    }
+    Some(data) if just_released => {
+      if let Ok((_, _, mut transform)) = pieces.get_mut(data.entity) {
+        transform.translation = data.original_translation;
       }
-      selected_piece.entity = None;
-      selected_piece.original_position = None;
-
+      selected_piece.data = None;
     }
     None if just_pressed => {
       for (entity, sprite, transform) in &pieces {
         if let Some(image) = &images.get(sprite.image.id()) {
           let size = image.size();
           let scale = transform.scale.truncate();
-          
+
           let true_size = Vec2 {
             x: size.x as f32 * scale.x,
             y: size.y as f32 * scale.y,
           };
 
-          //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width / height
+          //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width or height
           let image_center = transform.translation.truncate();
           let x0 = image_center.x - true_size.x / 2.0 + resolution.width() / 2.0;
           let x1 = image_center.x + true_size.x / 2.0 + resolution.width() / 2.0;
@@ -179,13 +183,18 @@ fn detect_piece(
 
           if x > x0 && x < x1 && y > y0 && y < y1 {
             if mouse.just_pressed(MouseButton::Left) {
-              selected_piece.entity = Some(entity);
-              selected_piece.original_position = Some(transform.translation);
+              let data = SelectedPieceData {
+                entity,
+                original_translation: transform.translation,
+              };
+
+              selected_piece.data = Some(data);
             }
           }
         }
       }
-    },
+    }
     _ => {}
   }
 }
+
