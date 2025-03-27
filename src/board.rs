@@ -6,6 +6,13 @@ pub struct Board {
 }
 
 impl Board {
+pub fn default() -> Board {
+    Board {
+      white: Pieces::white(),
+      black: Pieces::black(),
+    }
+  }
+
   pub fn from_fen(fen_string: &str) -> Board {
     let mut board = Board {
       white: Pieces::empty(),
