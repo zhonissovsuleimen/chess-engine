@@ -1,8 +1,8 @@
 use crate::pieces::Pieces;
 
 pub struct Board {
-  white: Pieces,
-  black: Pieces,
+  pub white: Pieces,
+  pub black: Pieces,
 }
 
 impl Board {
