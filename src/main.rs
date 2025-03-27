@@ -7,6 +7,12 @@ use board::Board;
 #[derive(Component)]
 struct PieceTag;
 
+#[derive(Resource, Default)]
+struct SelectedPiece {
+  entity: Option<Entity>,
+  original_position: Option<Vec3>,
+}
+
 fn main() {
   let plugins = DefaultPlugins.set(WindowPlugin {
     primary_window: Some(Window {
@@ -29,6 +35,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
   commands.spawn(Camera2d);
   commands.spawn(Sprite::from_image(asset_server.load("board.png")));
   commands.insert_resource(Board::default());
+  commands.insert_resource(SelectedPiece::default());
 }
 
 fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
@@ -121,38 +128,66 @@ fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res
 
 fn detect_piece(
   window: Query<&Window, With<PrimaryWindow>>,
-  pieces: Query<(&Sprite, &Transform), With<PieceTag>>,
+  mut pieces: Query<(Entity, &Sprite, &mut Transform), With<PieceTag>>,
   images: Res<Assets<Image>>,
+  mouse: Res<ButtonInput<MouseButton>>,
+  mut selected_piece: ResMut<SelectedPiece>,
 ) {
-  if let Some(cursor_position) = &window.single().cursor_position() {
-    let resolution = &window.single().resolution;
+  let Some(cursor_position) = window.single().cursor_position() else { return };
+  let resolution = &window.single().resolution;
 
-    //goes from 0 to width / height
-    let x = cursor_position.x;
-    let y = cursor_position.y;
+  //goes from 0 to width / height
+  let x = cursor_position.x;
+  let y = cursor_position.y;
 
-    for (sprite, transform) in &pieces {
-      if let Some(image) = &images.get(sprite.image.id()) {
-        let size = image.size();
-        let scale = transform.scale.truncate();
-        
-        let true_size = Vec2 {
-          x: size.x as f32 * scale.x,
-          y: size.y as f32 * scale.y,
-        };
+  let just_pressed = mouse.just_pressed(MouseButton::Left);
+  let being_pressed = mouse.pressed(MouseButton::Left);
+  let just_released = mouse.just_released(MouseButton::Left);
 
-        //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width / height
-        let image_center = transform.translation.truncate();
-        let x0 = image_center.x - true_size.x / 2.0 + resolution.width() / 2.0;
-        let x1 = image_center.x + true_size.x / 2.0 + resolution.width() / 2.0;
+  match selected_piece.entity {
+    Some(entity) if being_pressed => {
+      if let Ok((_, _, mut transform)) = pieces.get_mut(entity) {
+        transform.translation.x = cursor_position.x - resolution.width() / 2.0;
+        transform.translation.y = resolution.height() / 2.0 - cursor_position.y;
+        transform.translation.z = 1.0;
+      }
+    },
+    Some(entity) if just_released => {
+      if let Ok((_, _, mut transform)) = pieces.get_mut(entity) {
+        transform.translation = selected_piece.original_position.unwrap();
+      }
+      selected_piece.entity = None;
+      selected_piece.original_position = None;
 
-        let y0 = resolution.height() / 2.0 - image_center.y - true_size.y / 2.0;
-        let y1 = resolution.height() / 2.0 - image_center.y + true_size.y / 2.0;
+    }
+    None if just_pressed => {
+      for (entity, sprite, transform) in &pieces {
+        if let Some(image) = &images.get(sprite.image.id()) {
+          let size = image.size();
+          let scale = transform.scale.truncate();
+          
+          let true_size = Vec2 {
+            x: size.x as f32 * scale.x,
+            y: size.y as f32 * scale.y,
+          };
 
-        if x > x0 && x < x1 && y > y0 && y < y1 {
-          println!("detected {}", sprite.image.path().unwrap());
+          //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width / height
+          let image_center = transform.translation.truncate();
+          let x0 = image_center.x - true_size.x / 2.0 + resolution.width() / 2.0;
+          let x1 = image_center.x + true_size.x / 2.0 + resolution.width() / 2.0;
+
+          let y0 = resolution.height() / 2.0 - image_center.y - true_size.y / 2.0;
+          let y1 = resolution.height() / 2.0 - image_center.y + true_size.y / 2.0;
+
+          if x > x0 && x < x1 && y > y0 && y < y1 {
+            if mouse.just_pressed(MouseButton::Left) {
+              selected_piece.entity = Some(entity);
+              selected_piece.original_position = Some(transform.translation);
+            }
+          }
         }
       }
-    }
+    },
+    _ => {}
   }
 }
