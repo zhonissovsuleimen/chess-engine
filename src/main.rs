@@ -1,7 +1,9 @@
 mod board;
 mod pieces;
+mod board_position_lookup;
 
 use bevy::{prelude::*, window::PrimaryWindow};
+use board_position_lookup::LOOKUP;
 use board::Board;
 
 #[derive(Component)]
@@ -39,13 +41,9 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
-  let half_square_length = 48.0;
-  let square_length = 96.0;
   for i in 0..64 {
-    let offset_x = (((i % 8) - 4) as f32) * square_length + half_square_length;
-    let offset_y = ((4 - (i / 8)) as f32) * square_length - half_square_length;
     let transform = Transform {
-      translation: Vec3::new(offset_x, offset_y, 0.1),
+      translation: LOOKUP[i],
       scale: Vec3::splat(0.75),
       rotation: Quat::IDENTITY,
     };
