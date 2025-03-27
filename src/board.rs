@@ -1,5 +1,7 @@
+use bevy::ecs::system::Resource;
 use crate::pieces::Pieces;
 
+#[derive(Resource)]
 pub struct Board {
   pub white: Pieces,
   pub black: Pieces,
