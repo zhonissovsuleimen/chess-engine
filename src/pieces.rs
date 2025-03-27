@@ -9,7 +9,7 @@ pub struct Pieces {
 }
 
 impl Pieces {
-  pub fn new() -> Pieces {
+  pub fn empty() -> Pieces {
     Pieces { pawns: 0, knights: 0, bishops: 0, rooks: 0, queens: 0, king: 0 }
   }
 }
