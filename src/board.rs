@@ -8,8 +8,8 @@ pub struct Board {
 impl Board {
   pub fn from_fen(fen_string: &str) -> Board {
     let mut board = Board {
-      white: Pieces::new(),
-      black: Pieces::new(),
+      white: Pieces::empty(),
+      black: Pieces::empty(),
     };
 
     let slices: Vec<&str> = fen_string.split_whitespace().collect();
