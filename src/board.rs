@@ -1,38 +1,48 @@
-use bevy::ecs::system::Resource;
 use crate::pieces::Pieces;
+use bevy::ecs::system::Resource;
 
 #[derive(Resource)]
 pub struct Board {
+  pub white_to_move: bool,
   pub white: Pieces,
   pub black: Pieces,
 }
 
 impl Board {
-pub fn default() -> Board {
+  pub fn default() -> Board {
     Board {
+      white_to_move: true,
       white: Pieces::white(),
       black: Pieces::black(),
     }
   }
 
   pub fn move_piece(&mut self, from: u64, to: u64) -> bool {
+    if (self.white_to_move && self.contains_black_piece(from))
+      || (!self.white_to_move && self.contains_white_piece(from))
+    {
+      return false;
+    }
+
     if !self.is_empty(to) {
       return false;
     }
 
-    if self.contains_white_piece(from) {
+    if self.white_to_move {
       for piece_sets in self.white.as_mut_array() {
         if (*piece_sets >> from & 1) == 1 {
           *piece_sets -= 1 << from;
           *piece_sets += 1 << to;
+          self.white_to_move = false;
           return true;
         }
       }
-    } else if self.contains_black_piece(from) {
+    } else {
       for piece_sets in self.black.as_mut_array() {
         if (*piece_sets >> from & 1) == 1 {
           *piece_sets -= 1 << from;
           *piece_sets += 1 << to;
+          self.white_to_move = true;
           return true;
         }
       }
@@ -55,6 +65,7 @@ pub fn default() -> Board {
 
   pub fn from_fen(fen_string: &str) -> Board {
     let mut board = Board {
+      white_to_move: true,
       white: Pieces::empty(),
       black: Pieces::empty(),
     };
@@ -96,14 +107,20 @@ pub fn default() -> Board {
 
           increment_file = false;
         }
-        _ => {
-          increment_file = false;
+        wrong_char => {
+          panic!("Unexpected character ({wrong_char}) in piece placement data");
         }
       }
 
       if increment_file {
         file += 1;
       }
+    }
+
+    match slices[1] {
+      "w" => board.white_to_move = true,
+      "b" => board.white_to_move = false,
+      wrong_char => panic!("Unexpected character ({wrong_char}) in active color data"),
     }
 
     board
