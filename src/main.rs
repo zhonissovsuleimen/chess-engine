@@ -21,10 +21,13 @@ struct SelectedPiece {
 
 #[derive(Resource, Default)]
 struct MouseData {
+  x: f32,
+  y: f32,
+  board_pos: usize,
+
   being_pressed: bool,
   just_pressed: bool,
   just_released: bool,
-  board_pos: usize,
 }
 
 fn main() {
@@ -141,41 +144,30 @@ fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res
 
 fn detect_piece(
   window: Query<&Window, With<PrimaryWindow>>,
-  mut pieces: Query<(Entity, &Sprite, &mut Transform), With<PieceTag>>,
-  images: Res<Assets<Image>>,
-  mouse: Res<ButtonInput<MouseButton>>,
+  sprites: Res<Assets<Image>>,
+  mut sprite_query: Query<(Entity, &Sprite, &mut Transform), With<PieceTag>>,
+  mouse: Res<MouseData>,
   mut selected_piece: ResMut<SelectedPiece>,
 ) {
-  let Some(cursor_position) = window.single().cursor_position() else {
-    return;
-  };
-  //goes from 0 to width or height
-  let x = cursor_position.x;
-  let y = cursor_position.y;
-
   let resolution = &window.single().resolution;
 
-  let just_pressed = mouse.just_pressed(MouseButton::Left);
-  let being_pressed = mouse.pressed(MouseButton::Left);
-  let just_released = mouse.just_released(MouseButton::Left);
-
   match &mut selected_piece.data {
-    Some(data) if being_pressed => {
-      if let Ok((_, _, mut transform)) = pieces.get_mut(data.entity) {
-        transform.translation.x = cursor_position.x - resolution.width() / 2.0;
-        transform.translation.y = resolution.height() / 2.0 - cursor_position.y;
+    Some(data) if mouse.being_pressed => {
+      if let Ok((_, _, mut transform)) = sprite_query.get_mut(data.entity) {
+        transform.translation.x = mouse.x;
+        transform.translation.y = mouse.y;
         transform.translation.z = 1.0;
       }
     }
-    Some(data) if just_released => {
-      if let Ok((_, _, mut transform)) = pieces.get_mut(data.entity) {
-        transform.translation = data.original_translation;
+    Some(data) if mouse.just_released => {
+      if let Ok((_, _, mut transform)) = sprite_query.get_mut(data.entity) {
+        transform.translation = CENTER_LOOKUP[mouse.board_pos];
       }
       selected_piece.data = None;
     }
-    None if just_pressed => {
-      for (entity, sprite, transform) in &pieces {
-        if let Some(image) = &images.get(sprite.image.id()) {
+    None if mouse.just_pressed => {
+      for (entity, sprite, transform) in &sprite_query {
+        if let Some(image) = &sprites.get(sprite.image.id()) {
           let size = image.size();
           let scale = transform.scale.truncate();
 
@@ -186,21 +178,19 @@ fn detect_piece(
 
           //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width or height
           let image_center = transform.translation.truncate();
-          let x0 = image_center.x - true_size.x / 2.0 + resolution.width() / 2.0;
-          let x1 = image_center.x + true_size.x / 2.0 + resolution.width() / 2.0;
+          let x0 = image_center.x - true_size.x / 2.0;
+          let x1 = image_center.x + true_size.x / 2.0;
 
-          let y0 = resolution.height() / 2.0 - image_center.y - true_size.y / 2.0;
-          let y1 = resolution.height() / 2.0 - image_center.y + true_size.y / 2.0;
+          let y0 = image_center.y - true_size.y / 2.0;
+          let y1 = image_center.y + true_size.y / 2.0;
 
-          if x > x0 && x < x1 && y > y0 && y < y1 {
-            if mouse.just_pressed(MouseButton::Left) {
-              let data = SelectedPieceData {
-                entity,
-                original_translation: transform.translation,
-              };
+          if mouse.x > x0 && mouse.x < x1 && mouse.y > y0 && mouse.y < y1 {
+            let data = SelectedPieceData {
+              entity,
+              original_translation: transform.translation,
+            };
 
-              selected_piece.data = Some(data);
-            }
+            selected_piece.data = Some(data);
           }
         }
       }
@@ -225,6 +215,9 @@ fn update_mouse_data(
 
   let x = cursor.x - resolution.width() / 2.0;
   let y = resolution.height() / 2.0 - cursor.y;
+
+  data.x = x;
+  data.y = y;
 
   for i in 0..64 {
     if x > X_LOOKUP[i].0 && x < X_LOOKUP[i].1 && y > Y_LOOKUP[i].0 && y < Y_LOOKUP[i].1 {
