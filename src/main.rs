@@ -14,7 +14,7 @@ struct SelectedPieceData {
   original_translation: Vec3,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 struct SelectedPiece {
   data: Option<SelectedPieceData>,
 }
@@ -41,6 +41,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
   commands.spawn(Camera2d);
   commands.spawn(Sprite::from_image(asset_server.load("board.png")));
   commands.insert_resource(Board::default());
+  commands.insert_resource(SelectedPiece::default());
   commands.insert_resource(SelectedPiece { data: None });
 }
 
