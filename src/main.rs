@@ -12,6 +12,7 @@ struct PieceTag;
 struct SelectedPieceData {
   entity: Entity,
   original_translation: Vec3,
+  original_board_pos: usize
 }
 
 #[derive(Resource, Default)]
@@ -147,6 +148,7 @@ fn detect_piece(
   mut sprite_query: Query<(Entity, &Sprite, &mut Transform), With<PieceTag>>,
   mouse: Res<MouseData>,
   mut selected_piece: ResMut<SelectedPiece>,
+  mut board: ResMut<Board>
 ) {
 
   match &mut selected_piece.data {
@@ -159,7 +161,11 @@ fn detect_piece(
     }
     Some(data) if mouse.just_released => {
       if let Ok((_, _, mut transform)) = sprite_query.get_mut(data.entity) {
-        transform.translation = CENTER_LOOKUP[mouse.board_pos];
+        if board.move_piece(data.original_board_pos as u64, mouse.board_pos as u64) {
+          transform.translation = CENTER_LOOKUP[mouse.board_pos];
+        } else {
+          transform.translation = data.original_translation;
+        }
       }
       selected_piece.data = None;
     }
@@ -186,6 +192,7 @@ fn detect_piece(
             let data = SelectedPieceData {
               entity,
               original_translation: transform.translation,
+              original_board_pos: mouse.board_pos
             };
 
             selected_piece.data = Some(data);
