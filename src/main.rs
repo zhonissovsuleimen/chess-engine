@@ -19,6 +19,14 @@ struct SelectedPiece {
   data: Option<SelectedPieceData>,
 }
 
+#[derive(Resource, Default)]
+struct MouseData {
+  being_pressed: bool,
+  just_pressed: bool,
+  just_released: bool,
+  board_pos: usize,
+}
+
 fn main() {
   let plugins = DefaultPlugins.set(WindowPlugin {
     primary_window: Some(Window {
@@ -31,8 +39,9 @@ fn main() {
 
   App::new()
     .add_plugins(plugins)
-    .add_systems(Startup, startup)
-    .add_systems(PostStartup, add_pieces)
+    .add_systems(PreStartup, startup)
+    .add_systems(Startup, add_pieces)
+    .add_systems(PreUpdate, update_mouse_data)
     .add_systems(Update, detect_piece)
     .run();
 }
@@ -40,9 +49,10 @@ fn main() {
 fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
   commands.spawn(Camera2d);
   commands.spawn(Sprite::from_image(asset_server.load("board.png")));
+
   commands.insert_resource(Board::default());
   commands.insert_resource(SelectedPiece::default());
-  commands.insert_resource(SelectedPiece { data: None });
+  commands.insert_resource(MouseData::default());
 }
 
 fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
@@ -142,13 +152,13 @@ fn detect_piece(
   //goes from 0 to width or height
   let x = cursor_position.x;
   let y = cursor_position.y;
-  
+
   let resolution = &window.single().resolution;
-  
+
   let just_pressed = mouse.just_pressed(MouseButton::Left);
   let being_pressed = mouse.pressed(MouseButton::Left);
   let just_released = mouse.just_released(MouseButton::Left);
-  
+
   match &mut selected_piece.data {
     Some(data) if being_pressed => {
       if let Ok((_, _, mut transform)) = pieces.get_mut(data.entity) {
@@ -199,3 +209,27 @@ fn detect_piece(
   }
 }
 
+fn update_mouse_data(
+  mut data: ResMut<MouseData>,
+  window: Query<&Window, With<PrimaryWindow>>,
+  mouse: Res<ButtonInput<MouseButton>>,
+) {
+  data.being_pressed = mouse.pressed(MouseButton::Left);
+  data.just_pressed = mouse.just_pressed(MouseButton::Left);
+  data.just_released = mouse.just_released(MouseButton::Left);
+
+  let Some(cursor) = &window.single().cursor_position() else {
+    return;
+  };
+  let resolution = &window.single().resolution;
+
+  let x = cursor.x - resolution.width() / 2.0;
+  let y = resolution.height() / 2.0 - cursor.y;
+
+  for i in 0..64 {
+    if x > X_LOOKUP[i].0 && x < X_LOOKUP[i].1 && y > Y_LOOKUP[i].0 && y < Y_LOOKUP[i].1 {
+      data.board_pos = i;
+      return;
+    }
+  }
+}
