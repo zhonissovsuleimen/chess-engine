@@ -143,13 +143,11 @@ fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res
 }
 
 fn detect_piece(
-  window: Query<&Window, With<PrimaryWindow>>,
   sprites: Res<Assets<Image>>,
   mut sprite_query: Query<(Entity, &Sprite, &mut Transform), With<PieceTag>>,
   mouse: Res<MouseData>,
   mut selected_piece: ResMut<SelectedPiece>,
 ) {
-  let resolution = &window.single().resolution;
 
   match &mut selected_piece.data {
     Some(data) if mouse.being_pressed => {
