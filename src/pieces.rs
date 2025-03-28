@@ -20,4 +20,16 @@ impl Pieces {
   pub fn black() -> Pieces {
     Pieces { pawns: 65280, knights: 66, bishops: 36, rooks: 129, queens: 8, king: 16 }
   }
+
+  pub fn as_array(&self) -> [&u64; 6] {
+    return [&self.pawns, &self.knights, &self.bishops, &self.rooks, &self.queens, &self.king];
+  }
+
+  pub fn as_mut_array(&mut self) -> [&mut u64; 6] {
+    return [&mut self.pawns, &mut self.knights, &mut self.bishops, &mut self.rooks, &mut self.queens, &mut self.king];
+  }
+
+  pub fn concat(&self) -> u64 {
+    return self.pawns + self.knights + self.bishops + self.rooks + self.queens + self.king;
+  }
 }
