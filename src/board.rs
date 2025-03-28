@@ -15,6 +15,44 @@ pub fn default() -> Board {
     }
   }
 
+  pub fn move_piece(&mut self, from: u64, to: u64) -> bool {
+    if !self.is_empty(to) {
+      return false;
+    }
+
+    if self.contains_white_piece(from) {
+      for piece_sets in self.white.as_mut_array() {
+        if (*piece_sets >> from & 1) == 1 {
+          *piece_sets -= 1 << from;
+          *piece_sets += 1 << to;
+          return true;
+        }
+      }
+    } else if self.contains_black_piece(from) {
+      for piece_sets in self.black.as_mut_array() {
+        if (*piece_sets >> from & 1) == 1 {
+          *piece_sets -= 1 << from;
+          *piece_sets += 1 << to;
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  pub fn is_empty(&self, id: u64) -> bool {
+    return !(self.contains_white_piece(id) || self.contains_black_piece(id));
+  }
+
+  pub fn contains_white_piece(&self, id: u64) -> bool {
+    return (self.white.concat() >> id & 1) == 1;
+  }
+
+  pub fn contains_black_piece(&self, id: u64) -> bool {
+    return (self.black.concat() >> id & 1) == 1;
+  }
+
   pub fn from_fen(fen_string: &str) -> Board {
     let mut board = Board {
       white: Pieces::empty(),
