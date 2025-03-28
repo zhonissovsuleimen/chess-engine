@@ -7,7 +7,7 @@ use board::Board;
 use board_position_lookup::{CENTER_LOOKUP, X_LOOKUP, Y_LOOKUP};
 
 #[derive(Component)]
-struct PieceTag;
+struct PieceTag(bool);
 
 struct SelectedPieceData {
   entity: Entity,
@@ -71,73 +71,73 @@ fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-pawn.png")),
         transform,
-        PieceTag,
+        PieceTag(true),
       ));
     } else if (board.white.knights >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-knight.png")),
         transform,
-        PieceTag,
+        PieceTag(true),
       ));
     } else if (board.white.bishops >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-bishop.png")),
         transform,
-        PieceTag,
+        PieceTag(true),
       ));
     } else if (board.white.rooks >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-rook.png")),
         transform,
-        PieceTag,
+        PieceTag(true),
       ));
     } else if (board.white.queens >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-queen.png")),
         transform,
-        PieceTag,
+        PieceTag(true),
       ));
     } else if (board.white.king >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-king.png")),
         transform,
-        PieceTag,
+        PieceTag(true),
       ));
     } else if (board.black.pawns >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-pawn.png")),
         transform,
-        PieceTag,
+        PieceTag(false),
       ));
     } else if (board.black.knights >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-knight.png")),
         transform,
-        PieceTag,
+        PieceTag(false),
       ));
     } else if (board.black.bishops >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-bishop.png")),
         transform,
-        PieceTag,
+        PieceTag(false),
       ));
     } else if (board.black.rooks >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-rook.png")),
         transform,
-        PieceTag,
+        PieceTag(false),
       ));
     } else if (board.black.queens >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-queen.png")),
         transform,
-        PieceTag,
+        PieceTag(false),
       ));
     } else if (board.black.king >> i) & 1 == 1 {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-king.png")),
         transform,
-        PieceTag,
+        PieceTag(false),
       ));
     }
   }
@@ -145,7 +145,7 @@ fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res
 
 fn detect_piece(
   sprites: Res<Assets<Image>>,
-  mut sprite_query: Query<(Entity, &Sprite, &mut Transform), With<PieceTag>>,
+  mut sprite_query: Query<(Entity, &Sprite, &mut Transform, &PieceTag)>,
   mouse: Res<MouseData>,
   mut selected_piece: ResMut<SelectedPiece>,
   mut board: ResMut<Board>
@@ -153,14 +153,14 @@ fn detect_piece(
 
   match &mut selected_piece.data {
     Some(data) if mouse.being_pressed => {
-      if let Ok((_, _, mut transform)) = sprite_query.get_mut(data.entity) {
+      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
         transform.translation.x = mouse.x;
         transform.translation.y = mouse.y;
         transform.translation.z = 1.0;
       }
     }
     Some(data) if mouse.just_released => {
-      if let Ok((_, _, mut transform)) = sprite_query.get_mut(data.entity) {
+      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
         if board.move_piece(data.original_board_pos as u64, mouse.board_pos as u64) {
           transform.translation = CENTER_LOOKUP[mouse.board_pos];
         } else {
@@ -170,7 +170,11 @@ fn detect_piece(
       selected_piece.data = None;
     }
     None if mouse.just_pressed => {
-      for (entity, sprite, transform) in &sprite_query {
+      for (entity, sprite, transform, is_white) in &sprite_query {
+        if is_white.0 != board.white_to_move {
+          continue;
+        } 
+
         if let Some(image) = &sprites.get(sprite.image.id()) {
           let size = image.size();
           let scale = transform.scale.truncate();
