@@ -4,7 +4,7 @@ mod pieces;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 use board::Board;
-use board_position_lookup::LOOKUP;
+use board_position_lookup::{CENTER_LOOKUP, X_LOOKUP, Y_LOOKUP};
 
 #[derive(Component)]
 struct PieceTag;
@@ -48,7 +48,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
   for i in 0..64 {
     let transform = Transform {
-      translation: LOOKUP[i],
+      translation: CENTER_LOOKUP[i],
       scale: Vec3::splat(0.75),
       rotation: Quat::IDENTITY,
     };
