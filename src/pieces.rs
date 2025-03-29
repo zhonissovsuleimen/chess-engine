@@ -70,6 +70,6 @@ impl Pieces {
   }
 
   pub fn is_empty(&self, at_mask: u64) -> bool {
-    self.pieces_concat() & at_mask == 1
+    self.pieces_concat() & at_mask == 0
   }
 }
