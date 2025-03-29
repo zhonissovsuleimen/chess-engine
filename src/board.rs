@@ -50,8 +50,8 @@ impl Board {
       }
 
       if to_mask & new_moves_mask > 0 {
-        *correct_pieces.as_mut_array()[i] -= from_mask;
-        *correct_pieces.as_mut_array()[i] += to_mask;
+        *correct_pieces.pieces_as_mut_array()[i] -= from_mask;
+        *correct_pieces.pieces_as_mut_array()[i] += to_mask;
 
         self.white_to_move = !self.white_to_move;
         return true;
@@ -66,11 +66,11 @@ impl Board {
   }
 
   fn contains_white_piece(&self, mask: u64) -> bool {
-    return self.white.concat() & mask > 0;
+    return self.white.pieces_concat() & mask > 0;
   }
 
   fn contains_black_piece(&self, mask: u64) -> bool {
-    return self.black.concat() & mask > 0;
+    return self.black.pieces_concat() & mask > 0;
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
