@@ -17,50 +17,60 @@ impl Board {
     }
   }
 
-  pub fn move_piece(&mut self, from: u64, to: u64) -> bool {
-    if (self.white_to_move && self.contains_black_piece(from))
-      || (!self.white_to_move && self.contains_white_piece(from))
+  pub fn move_piece(&mut self, from_id: usize, to_id: usize) -> bool {
+    assert!(from_id < 64);
+    assert!(to_id < 64);
+
+    let from_mask: u64 = 1 << from_id;
+    let to_mask: u64 = 1 << to_id;
+
+    if (self.white_to_move && self.contains_black_piece(from_mask))
+      || (!self.white_to_move && self.contains_white_piece(from_mask))
     {
       return false;
     }
 
-    if !self.is_empty(to) {
-      return false;
-    }
-
-    if self.white_to_move {
-      for piece_sets in self.white.as_mut_array() {
-        if (*piece_sets >> from & 1) == 1 {
-          *piece_sets -= 1 << from;
-          *piece_sets += 1 << to;
-          self.white_to_move = false;
-          return true;
-        }
-      }
+    let correct_pieces = if self.white_to_move {
+      &mut self.white
     } else {
-      for piece_sets in self.black.as_mut_array() {
-        if (*piece_sets >> from & 1) == 1 {
-          *piece_sets -= 1 << from;
-          *piece_sets += 1 << to;
-          self.white_to_move = true;
-          return true;
+      &mut self.black
+    };
+
+    for i in 0..6 {
+      let mut new_moves_mask: u64 = 0;
+      match i {
+        0 => {
+          if self.white_to_move {
+            new_moves_mask += from_mask.checked_shr(8).unwrap_or(0);
+          } else {
+            new_moves_mask += from_mask.checked_shl(8).unwrap_or(0);
+          }
         }
+        _ => {}
+      }
+
+      if to_mask & new_moves_mask > 0 {
+        *correct_pieces.as_mut_array()[i] -= from_mask;
+        *correct_pieces.as_mut_array()[i] += to_mask;
+
+        self.white_to_move = !self.white_to_move;
+        return true;
       }
     }
 
     return false;
   }
 
-  pub fn is_empty(&self, id: u64) -> bool {
-    return !(self.contains_white_piece(id) || self.contains_black_piece(id));
+  fn is_empty(&self, mask: u64) -> bool {
+    return !(self.contains_white_piece(mask) || self.contains_black_piece(mask));
   }
 
-  pub fn contains_white_piece(&self, id: u64) -> bool {
-    return (self.white.concat() >> id & 1) == 1;
+  fn contains_white_piece(&self, mask: u64) -> bool {
+    return self.white.concat() & mask > 0;
   }
 
-  pub fn contains_black_piece(&self, id: u64) -> bool {
-    return (self.black.concat() >> id & 1) == 1;
+  fn contains_black_piece(&self, mask: u64) -> bool {
+    return self.black.concat() & mask > 0;
   }
 
   pub fn from_fen(fen_string: &str) -> Board {

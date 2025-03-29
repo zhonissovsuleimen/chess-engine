@@ -12,7 +12,7 @@ struct PieceTag(bool);
 struct SelectedPieceData {
   entity: Entity,
   original_translation: Vec3,
-  original_board_pos: usize
+  original_board_pos: usize,
 }
 
 #[derive(Resource, Default)]
@@ -148,9 +148,8 @@ fn detect_piece(
   mut sprite_query: Query<(Entity, &Sprite, &mut Transform, &PieceTag)>,
   mouse: Res<MouseData>,
   mut selected_piece: ResMut<SelectedPiece>,
-  mut board: ResMut<Board>
+  mut board: ResMut<Board>,
 ) {
-
   match &mut selected_piece.data {
     Some(data) if mouse.being_pressed => {
       if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
@@ -161,7 +160,7 @@ fn detect_piece(
     }
     Some(data) if mouse.just_released => {
       if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
-        if board.move_piece(data.original_board_pos as u64, mouse.board_pos as u64) {
+        if board.move_piece(data.original_board_pos, mouse.board_pos) {
           transform.translation = CENTER_LOOKUP[mouse.board_pos];
         } else {
           transform.translation = data.original_translation;
@@ -173,7 +172,7 @@ fn detect_piece(
       for (entity, sprite, transform, is_white) in &sprite_query {
         if is_white.0 != board.white_to_move {
           continue;
-        } 
+        }
 
         if let Some(image) = &sprites.get(sprite.image.id()) {
           let size = image.size();
@@ -196,7 +195,7 @@ fn detect_piece(
             let data = SelectedPieceData {
               entity,
               original_translation: transform.translation,
-              original_board_pos: mouse.board_pos
+              original_board_pos: mouse.board_pos,
             };
 
             selected_piece.data = Some(data);
