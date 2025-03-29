@@ -5,28 +5,72 @@ pub struct Pieces {
   pub bishops: u64,
   pub rooks: u64,
   pub queens: u64,
-  pub king: u64
+  pub king: u64,
+
+  pub pawns_advance: u64,
 }
 
+//constructors
 impl Pieces {
   pub fn empty() -> Pieces {
-    Pieces { pawns: 0, knights: 0, bishops: 0, rooks: 0, queens: 0, king: 0 }
+    Pieces {
+      pawns: 0,
+      knights: 0,
+      bishops: 0,
+      rooks: 0,
+      queens: 0,
+      king: 0,
+      pawns_advance: 0,
+    }
   }
 
   pub fn white() -> Pieces {
-    Pieces { pawns: 71776119061217280, knights: 4755801206503243776, bishops: 2594073385365405696, rooks: 9295429630892703744, queens: 576460752303423488, king: 1152921504606846976 }
+    Pieces {
+      pawns: 71776119061217280,
+      knights: 4755801206503243776,
+      bishops: 2594073385365405696,
+      rooks: 9295429630892703744,
+      queens: 576460752303423488,
+      king: 1152921504606846976,
+      pawns_advance: 71776119061217280,
+    }
   }
 
   pub fn black() -> Pieces {
-    Pieces { pawns: 65280, knights: 66, bishops: 36, rooks: 129, queens: 8, king: 16 }
+    Pieces {
+      pawns: 65280,
+      knights: 66,
+      bishops: 36,
+      rooks: 129,
+      queens: 8,
+      king: 16,
+      pawns_advance: 65280,
+    }
   }
+}
 
+//auxilary
+impl Pieces {
   pub fn pieces_as_array(&self) -> [&u64; 6] {
-    return [&self.pawns, &self.knights, &self.bishops, &self.rooks, &self.queens, &self.king];
+    return [
+      &self.pawns,
+      &self.knights,
+      &self.bishops,
+      &self.rooks,
+      &self.queens,
+      &self.king,
+    ];
   }
 
   pub fn pieces_as_mut_array(&mut self) -> [&mut u64; 6] {
-    return [&mut self.pawns, &mut self.knights, &mut self.bishops, &mut self.rooks, &mut self.queens, &mut self.king];
+    return [
+      &mut self.pawns,
+      &mut self.knights,
+      &mut self.bishops,
+      &mut self.rooks,
+      &mut self.queens,
+      &mut self.king,
+    ];
   }
 
   pub fn pieces_concat(&self) -> u64 {
@@ -69,7 +113,16 @@ impl Pieces {
     }
   }
 
+  pub fn remove_advance(&mut self, at_mask: u64) {
+    self.pawns_advance &= !at_mask;
+  }
+
   pub fn is_empty(&self, at_mask: u64) -> bool {
     self.pieces_concat() & at_mask == 0
   }
+
+  pub fn can_advance(&self, at_mask: u64) -> bool {
+    return (self.pawns & self.pawns_advance & at_mask) > 0;
+  }
+
 }

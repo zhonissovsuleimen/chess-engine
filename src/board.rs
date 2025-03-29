@@ -30,30 +30,66 @@ impl Board {
       return false;
     }
 
-    let correct_pieces = if self.white_to_move {
-      &mut self.white
-    } else {
-      &mut self.black
-    };
+    if self.white_to_move {
+      for i in 0..6 {
+        let mut new_moves_mask: u64 = 0;
+        match i {
+          0 => {
+            let move_one = from_mask.checked_shr(8).unwrap_or(0);
+            let move_two = from_mask.checked_shr(16).unwrap_or(0);
 
-    for i in 0..6 {
-      let mut new_moves_mask: u64 = 0;
-      match i {
-        0 => {
-          if self.white_to_move {
-            new_moves_mask += from_mask.checked_shr(8).unwrap_or(0);
-          } else {
-            new_moves_mask += from_mask.checked_shl(8).unwrap_or(0);
+            if self.is_empty(move_one) {
+              new_moves_mask += move_one;
+            }
+
+            if self.is_empty(move_one)
+              && self.is_empty(move_two)
+              && self.white.can_advance(from_mask)
+            {
+              new_moves_mask += move_two;
+              self.white.remove_advance(from_mask);
+            }
+
           }
+          _ => {}
         }
-        _ => {}
+
+        if to_mask & new_moves_mask > 0 {
+          self.white.r#move(from_mask, to_mask);
+
+          self.white_to_move = false;
+          return true;
+        }
       }
+    } else {
+      for i in 0..6 {
+        let mut new_moves_mask: u64 = 0;
+        match i {
+          0 => {
+            let move_one = from_mask.checked_shl(8).unwrap_or(0);
+            let move_two = from_mask.checked_shl(16).unwrap_or(0);
 
-      if to_mask & new_moves_mask > 0 {
-        correct_pieces.r#move(from_mask, to_mask);
+            if self.is_empty(move_one) {
+              new_moves_mask += move_one;
+            }
 
-        self.white_to_move = !self.white_to_move;
-        return true;
+            if self.is_empty(move_one)
+              && self.is_empty(move_two)
+              && self.black.can_advance(from_mask)
+            {
+              new_moves_mask += move_two;
+              self.black.remove_advance(from_mask);
+            }
+          }
+          _ => {}
+        }
+
+        if to_mask & new_moves_mask > 0 {
+          self.black.r#move(from_mask, to_mask);
+
+          self.white_to_move = true;
+          return true;
+        }
       }
     }
 
