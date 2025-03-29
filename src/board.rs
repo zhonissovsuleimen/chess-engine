@@ -24,8 +24,8 @@ impl Board {
     let from_mask: u64 = 1 << from_id;
     let to_mask: u64 = 1 << to_id;
 
-    if (self.white_to_move && self.contains_black_piece(from_mask))
-      || (!self.white_to_move && self.contains_white_piece(from_mask))
+    if (self.white_to_move && self.white.is_empty(from_mask))
+      || (!self.white_to_move && self.black.is_empty(from_mask))
     {
       return false;
     }
@@ -50,8 +50,7 @@ impl Board {
       }
 
       if to_mask & new_moves_mask > 0 {
-        *correct_pieces.pieces_as_mut_array()[i] -= from_mask;
-        *correct_pieces.pieces_as_mut_array()[i] += to_mask;
+        correct_pieces.r#move(from_mask, to_mask);
 
         self.white_to_move = !self.white_to_move;
         return true;
@@ -61,16 +60,8 @@ impl Board {
     return false;
   }
 
-  fn is_empty(&self, mask: u64) -> bool {
-    return !(self.contains_white_piece(mask) || self.contains_black_piece(mask));
-  }
-
-  fn contains_white_piece(&self, mask: u64) -> bool {
-    return self.white.pieces_concat() & mask > 0;
-  }
-
-  fn contains_black_piece(&self, mask: u64) -> bool {
-    return self.black.pieces_concat() & mask > 0;
+  fn is_empty(&self, at_mask: u64) -> bool {
+    return self.white.is_empty(at_mask) && self.black.is_empty(at_mask);
   }
 
   pub fn from_fen(fen_string: &str) -> Board {

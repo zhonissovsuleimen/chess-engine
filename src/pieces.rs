@@ -33,3 +33,43 @@ impl Pieces {
     return self.pawns + self.knights + self.bishops + self.rooks + self.queens + self.king;
   }
 }
+
+//moves & state
+impl Pieces {
+  pub fn r#move(&mut self, from_mask: u64, to_mask: u64) {
+    //todo: branchless bitwise trickery
+    for i in 0..6 {
+      match i {
+        0 if self.pawns & from_mask > 0 => {
+          self.pawns -= from_mask;
+          self.pawns += to_mask;
+        }
+        1 if self.knights & from_mask > 0 => {
+          self.knights -= from_mask;
+          self.knights += to_mask;
+        }
+        2 if self.bishops & from_mask > 0 => {
+          self.bishops -= from_mask;
+          self.bishops += to_mask;
+        }
+        3 if self.rooks & from_mask > 0 => {
+          self.rooks -= from_mask;
+          self.rooks += to_mask;
+        }
+        4 if self.queens & from_mask > 0 => {
+          self.queens -= from_mask;
+          self.queens += to_mask;
+        }
+        5 if self.king & from_mask > 0 => {
+          self.king -= from_mask;
+          self.king += to_mask;
+        }
+        _ => {}
+      }
+    }
+  }
+
+  pub fn is_empty(&self, at_mask: u64) -> bool {
+    self.pieces_concat() & at_mask == 1
+  }
+}
