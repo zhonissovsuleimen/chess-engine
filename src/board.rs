@@ -75,6 +75,33 @@ impl Board {
 
       new_moves_mask = knight_moves & emptiness;
     } else if selected_pieces.is_bishop(from_mask) {
+      let mut bishop_moves = 0;
+
+      let mut tl = from_mask.checked_shr(9).unwrap_or(0);
+      while emptiness & tl > 0 {
+        bishop_moves += tl;
+        tl = tl.checked_shr(9).unwrap_or(0);
+      }
+
+      let mut tr = from_mask.checked_shr(7).unwrap_or(0);
+      while emptiness & tr > 0 {
+        bishop_moves += tr;
+        tr = tr.checked_shr(7).unwrap_or(0);
+      }
+
+      let mut bl = from_mask.checked_shl(7).unwrap_or(0);
+      while emptiness & bl > 0 {
+        bishop_moves += bl;
+        bl = bl.checked_shl(7).unwrap_or(0);
+      }
+
+      let mut br = from_mask.checked_shl(9).unwrap_or(0);
+      while emptiness & br > 0 {
+        bishop_moves += br;
+        br = br.checked_shl(9).unwrap_or(0);
+      }
+
+      new_moves_mask += bishop_moves;
     } else if selected_pieces.is_rook(from_mask) {
     } else if selected_pieces.is_queen(from_mask) {
     } else if selected_pieces.is_king(from_mask) {
