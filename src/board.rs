@@ -61,8 +61,8 @@ impl Board {
       }
 
       new_moves_mask = pawn_moves;
-    } else if selected_pieces.is_bishop(from_mask) {
     } else if selected_pieces.is_knight(from_mask) {
+    } else if selected_pieces.is_bishop(from_mask) {
     } else if selected_pieces.is_rook(from_mask) {
     } else if selected_pieces.is_queen(from_mask) {
     } else if selected_pieces.is_king(from_mask) {

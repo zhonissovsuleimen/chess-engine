@@ -85,10 +85,10 @@ impl Pieces {
     if self.is_pawn(from_mask) {
       self.pawns -= from_mask;
       self.pawns += to_mask;
-    } else if self.is_bishop(from_mask) {
+    } else if self.is_knight(from_mask) {
       self.knights -= from_mask;
       self.knights += to_mask;
-    } else if self.is_knight(from_mask) {
+    } else if self.is_bishop(from_mask) {
       self.bishops -= from_mask;
       self.bishops += to_mask;
     } else if self.is_rook(from_mask) {
