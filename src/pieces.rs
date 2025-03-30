@@ -82,34 +82,24 @@ impl Pieces {
 impl Pieces {
   pub fn r#move(&mut self, from_mask: u64, to_mask: u64) {
     //todo: branchless bitwise trickery
-    for i in 0..6 {
-      match i {
-        0 if self.pawns & from_mask > 0 => {
-          self.pawns -= from_mask;
-          self.pawns += to_mask;
-        }
-        1 if self.knights & from_mask > 0 => {
-          self.knights -= from_mask;
-          self.knights += to_mask;
-        }
-        2 if self.bishops & from_mask > 0 => {
-          self.bishops -= from_mask;
-          self.bishops += to_mask;
-        }
-        3 if self.rooks & from_mask > 0 => {
-          self.rooks -= from_mask;
-          self.rooks += to_mask;
-        }
-        4 if self.queens & from_mask > 0 => {
-          self.queens -= from_mask;
-          self.queens += to_mask;
-        }
-        5 if self.king & from_mask > 0 => {
-          self.king -= from_mask;
-          self.king += to_mask;
-        }
-        _ => {}
-      }
+    if self.is_pawn(from_mask) {
+      self.pawns -= from_mask;
+      self.pawns += to_mask;
+    } else if self.is_bishop(from_mask) {
+      self.knights -= from_mask;
+      self.knights += to_mask;
+    } else if self.is_knight(from_mask) {
+      self.bishops -= from_mask;
+      self.bishops += to_mask;
+    } else if self.is_rook(from_mask) {
+      self.rooks -= from_mask;
+      self.rooks += to_mask;
+    } else if self.is_queen(from_mask) {
+      self.queens -= from_mask;
+      self.queens += to_mask;
+    } else if self.is_king(from_mask) {
+      self.king -= from_mask;
+      self.king += to_mask;
     }
   }
 
@@ -125,4 +115,26 @@ impl Pieces {
     return (self.pawns & self.pawns_advance & at_mask) > 0;
   }
 
+  pub fn is_pawn(&self, at_mask: u64) -> bool {
+    return self.pawns & at_mask > 0;
+  }
+
+  pub fn is_knight(&self, at_mask: u64) -> bool {
+    return self.knights & at_mask > 0;
+  }
+
+  pub fn is_bishop(&self, at_mask: u64) -> bool {
+    return self.bishops & at_mask > 0;
+  }
+
+  pub fn is_rook(&self, at_mask: u64) -> bool {
+    return self.rooks & at_mask > 0;
+  }
+  pub fn is_queen(&self, at_mask: u64) -> bool {
+    return self.queens & at_mask > 0;
+  }
+
+  pub fn is_king(&self, at_mask: u64) -> bool {
+    return self.king & at_mask > 0;
+  }
 }
