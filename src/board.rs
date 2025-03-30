@@ -136,6 +136,10 @@ impl Board {
     return !(self.white.pieces_concat() | self.black.pieces_concat());
   }
 
+  fn advance_mask(&self) -> u64 {
+    return self.white.pawns_advance | self.black.pawns_advance;
+  }
+
   fn is_pawn(&self, at_mask: u64) -> bool {
     return self.white.is_pawn(at_mask) || self.black.is_pawn(at_mask);
   }
