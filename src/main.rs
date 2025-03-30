@@ -31,6 +31,11 @@ struct MouseData {
   just_released: bool,
 }
 
+#[derive(Resource)]
+struct BoardValue {
+  value: i32
+}
+
 fn main() {
   let plugins = DefaultPlugins.set(WindowPlugin {
     primary_window: Some(Window {
@@ -44,8 +49,7 @@ fn main() {
   App::new()
     .add_plugins(plugins)
     .add_systems(PreStartup, startup)
-    .add_systems(Startup, add_pieces)
-    .add_systems(PreUpdate, update_mouse_data)
+    .add_systems(PreUpdate, (update_sprites, update_mouse_data))
     .add_systems(Update, detect_piece)
     .run();
 }
@@ -57,9 +61,83 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
   commands.insert_resource(Board::default());
   commands.insert_resource(SelectedPiece::default());
   commands.insert_resource(MouseData::default());
+  commands.insert_resource(BoardValue { value: i32::MAX });
 }
 
-fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
+fn detect_piece(
+  sprites: Res<Assets<Image>>,
+  mut sprite_query: Query<(Entity, &Sprite, &mut Transform, &PieceTag)>,
+  mouse: Res<MouseData>,
+  mut selected_piece: ResMut<SelectedPiece>,
+  mut board: ResMut<Board>,
+) {
+  match &mut selected_piece.data {
+    Some(data) if mouse.being_pressed => {
+      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
+        transform.translation.x = mouse.x;
+        transform.translation.y = mouse.y;
+        transform.translation.z = 1.0;
+      }
+    }
+    Some(data) if mouse.just_released => {
+      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
+        if board.move_piece(data.original_board_pos, mouse.board_pos) {
+          transform.translation = CENTER_LOOKUP[mouse.board_pos];
+        } else {
+          transform.translation = data.original_translation;
+        }
+      }
+      selected_piece.data = None;
+    }
+    None if mouse.just_pressed => {
+      for (entity, sprite, transform, is_white) in &sprite_query {
+        if is_white.0 != board.white_to_move {
+          continue;
+        }
+
+        if let Some(image) = &sprites.get(sprite.image.id()) {
+          let size = image.size();
+          let scale = transform.scale.truncate();
+
+          let true_size = Vec2 {
+            x: size.x as f32 * scale.x,
+            y: size.y as f32 * scale.y,
+          };
+
+          //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width or height
+          let image_center = transform.translation.truncate();
+          let x0 = image_center.x - true_size.x / 2.0;
+          let x1 = image_center.x + true_size.x / 2.0;
+
+          let y0 = image_center.y - true_size.y / 2.0;
+          let y1 = image_center.y + true_size.y / 2.0;
+
+          if mouse.x > x0 && mouse.x < x1 && mouse.y > y0 && mouse.y < y1 {
+            let data = SelectedPieceData {
+              entity,
+              original_translation: transform.translation,
+              original_board_pos: mouse.board_pos,
+            };
+
+            selected_piece.data = Some(data);
+          }
+        }
+      }
+    }
+    _ => {}
+  }
+}
+
+fn update_sprites(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>, mut prev_value: ResMut<BoardValue>, sprites: Query<Entity, With<PieceTag>>) {
+  if board.get_piece_delta() == prev_value.value {
+    return;
+  }
+  prev_value.value = board.get_piece_delta();
+  
+  for sprite in sprites.iter() {
+    commands.entity(sprite).despawn();
+  }
+
   for i in 0..64 {
     let at_mask = 1 << i;
 
@@ -142,70 +220,6 @@ fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res
         PieceTag(false),
       ));
     }
-  }
-}
-
-fn detect_piece(
-  sprites: Res<Assets<Image>>,
-  mut sprite_query: Query<(Entity, &Sprite, &mut Transform, &PieceTag)>,
-  mouse: Res<MouseData>,
-  mut selected_piece: ResMut<SelectedPiece>,
-  mut board: ResMut<Board>,
-) {
-  match &mut selected_piece.data {
-    Some(data) if mouse.being_pressed => {
-      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
-        transform.translation.x = mouse.x;
-        transform.translation.y = mouse.y;
-        transform.translation.z = 1.0;
-      }
-    }
-    Some(data) if mouse.just_released => {
-      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
-        if board.move_piece(data.original_board_pos, mouse.board_pos) {
-          transform.translation = CENTER_LOOKUP[mouse.board_pos];
-        } else {
-          transform.translation = data.original_translation;
-        }
-      }
-      selected_piece.data = None;
-    }
-    None if mouse.just_pressed => {
-      for (entity, sprite, transform, is_white) in &sprite_query {
-        if is_white.0 != board.white_to_move {
-          continue;
-        }
-
-        if let Some(image) = &sprites.get(sprite.image.id()) {
-          let size = image.size();
-          let scale = transform.scale.truncate();
-
-          let true_size = Vec2 {
-            x: size.x as f32 * scale.x,
-            y: size.y as f32 * scale.y,
-          };
-
-          //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width or height
-          let image_center = transform.translation.truncate();
-          let x0 = image_center.x - true_size.x / 2.0;
-          let x1 = image_center.x + true_size.x / 2.0;
-
-          let y0 = image_center.y - true_size.y / 2.0;
-          let y1 = image_center.y + true_size.y / 2.0;
-
-          if mouse.x > x0 && mouse.x < x1 && mouse.y > y0 && mouse.y < y1 {
-            let data = SelectedPieceData {
-              entity,
-              original_translation: transform.translation,
-              original_board_pos: mouse.board_pos,
-            };
-
-            selected_piece.data = Some(data);
-          }
-        }
-      }
-    }
-    _ => {}
   }
 }
 
