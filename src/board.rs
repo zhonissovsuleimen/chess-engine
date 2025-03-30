@@ -33,9 +33,27 @@ impl Board {
     let mut new_moves_mask = 0;
 
     if self.is_pawn(from_mask) {
-      new_moves_mask = self.gen_pawn_move(from_mask)
-        | self.gen_pawn_advence_move(from_mask)
-        | self.gen_pawn_capturing_moves(from_mask);
+      let move_one = self.gen_pawn_move(from_mask);
+      let move_two = self.gen_pawn_advence_move(from_mask);
+      let capturing_moves = self.gen_pawn_capturing_moves(from_mask);
+
+      new_moves_mask += move_one & to_mask;
+      if move_two & to_mask > 0 {
+        new_moves_mask += move_two;
+        if self.white_to_move {
+          self.white.remove_advance(from_mask);
+        } else {
+          self.black.remove_advance(from_mask);
+        }
+      }
+      if capturing_moves & to_mask > 0{
+        new_moves_mask += capturing_moves;
+        if self.white_to_move {
+          self.black.remove_piece(to_mask);
+        } else {
+          self.white.remove_piece(to_mask);
+        }
+      }
     }
 
     if (to_mask & new_moves_mask) > 0 {
