@@ -30,66 +30,45 @@ impl Board {
       return false;
     }
 
-    if self.white_to_move {
-      for i in 0..6 {
-        let mut new_moves_mask: u64 = 0;
-        match i {
-          0 => {
-            let move_one = from_mask.checked_shr(8).unwrap_or(0);
-            let move_two = from_mask.checked_shr(16).unwrap_or(0);
-
-            if self.is_empty(move_one) {
-              new_moves_mask += move_one;
-            }
-
-            if self.is_empty(move_one)
-              && self.is_empty(move_two)
-              && self.white.can_advance(from_mask)
-            {
-              new_moves_mask += move_two;
-              self.white.remove_advance(from_mask);
-            }
-
-          }
-          _ => {}
-        }
-
-        if to_mask & new_moves_mask > 0 {
-          self.white.r#move(from_mask, to_mask);
-
-          self.white_to_move = false;
-          return true;
-        }
-      }
+    let white_to_move = self.white_to_move;
+    let emptiness = self.empty_mask();
+    let selected_pieces = if white_to_move {
+      &mut self.white
     } else {
-      for i in 0..6 {
-        let mut new_moves_mask: u64 = 0;
-        match i {
-          0 => {
-            let move_one = from_mask.checked_shl(8).unwrap_or(0);
-            let move_two = from_mask.checked_shl(16).unwrap_or(0);
+      &mut self.black
+    };
 
-            if self.is_empty(move_one) {
-              new_moves_mask += move_one;
-            }
+    for i in 0..6 {
+      let mut new_moves_mask: u64 = 0;
+      match i {
+        0 => {
+          let shift_fn = if white_to_move {
+            |mask: u64, shift: u32| mask.checked_shr(shift).unwrap_or(0)
+          } else {
+            |mask: u64, shift: u32| mask.checked_shl(shift).unwrap_or(0)
+          };
 
-            if self.is_empty(move_one)
-              && self.is_empty(move_two)
-              && self.black.can_advance(from_mask)
-            {
-              new_moves_mask += move_two;
-              self.black.remove_advance(from_mask);
-            }
+          let move_one = shift_fn(from_mask, 8);
+          let move_two = shift_fn(from_mask, 16);
+          let both_moves = move_one | move_two;
+
+          if emptiness & move_one > 0 {
+            new_moves_mask += move_one;
           }
-          _ => {}
-        }
 
-        if to_mask & new_moves_mask > 0 {
-          self.black.r#move(from_mask, to_mask);
-
-          self.white_to_move = true;
-          return true;
+          if emptiness & both_moves > 0 && selected_pieces.can_advance(from_mask) {
+            new_moves_mask += move_two;
+            selected_pieces.remove_advance(from_mask);
+          }
         }
+        _ => {}
+      }
+
+      if to_mask & new_moves_mask > 0 {
+        selected_pieces.r#move(from_mask, to_mask);
+
+        self.white_to_move = !self.white_to_move;
+        return true;
       }
     }
 
@@ -98,6 +77,10 @@ impl Board {
 
   fn is_empty(&self, at_mask: u64) -> bool {
     return self.white.is_empty(at_mask) && self.black.is_empty(at_mask);
+  }
+
+  fn empty_mask(&self) -> u64 {
+    return !(self.white.pieces_concat() | self.white.pieces_concat());
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
