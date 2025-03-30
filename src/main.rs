@@ -61,79 +61,81 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn add_pieces(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>) {
   for i in 0..64 {
+    let at_mask = 1 << i;
+
     let transform = Transform {
       translation: CENTER_LOOKUP[i],
       scale: Vec3::splat(0.75),
       rotation: Quat::IDENTITY,
     };
 
-    if (board.white.pawns >> i) & 1 == 1 {
+    if board.white.is_pawn(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-pawn.png")),
         transform,
         PieceTag(true),
       ));
-    } else if (board.white.knights >> i) & 1 == 1 {
+    } else if board.white.is_knight(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-knight.png")),
         transform,
         PieceTag(true),
       ));
-    } else if (board.white.bishops >> i) & 1 == 1 {
+    } else if board.white.is_bishop(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-bishop.png")),
         transform,
         PieceTag(true),
       ));
-    } else if (board.white.rooks >> i) & 1 == 1 {
+    } else if board.white.is_rook(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-rook.png")),
         transform,
         PieceTag(true),
       ));
-    } else if (board.white.queens >> i) & 1 == 1 {
+    } else if board.white.is_queen(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-queen.png")),
         transform,
         PieceTag(true),
       ));
-    } else if (board.white.king >> i) & 1 == 1 {
+    } else if board.white.is_king(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/white-king.png")),
         transform,
         PieceTag(true),
       ));
-    } else if (board.black.pawns >> i) & 1 == 1 {
+    } else if board.black.is_pawn(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-pawn.png")),
         transform,
         PieceTag(false),
       ));
-    } else if (board.black.knights >> i) & 1 == 1 {
+    } else if board.black.is_knight(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-knight.png")),
         transform,
         PieceTag(false),
       ));
-    } else if (board.black.bishops >> i) & 1 == 1 {
+    } else if board.black.is_bishop(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-bishop.png")),
         transform,
         PieceTag(false),
       ));
-    } else if (board.black.rooks >> i) & 1 == 1 {
+    } else if board.black.is_rook(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-rook.png")),
         transform,
         PieceTag(false),
       ));
-    } else if (board.black.queens >> i) & 1 == 1 {
+    } else if board.black.is_queen(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-queen.png")),
         transform,
         PieceTag(false),
       ));
-    } else if (board.black.king >> i) & 1 == 1 {
+    } else if board.black.is_king(at_mask) {
       commands.spawn((
         Sprite::from_image(asset_server.load("pieces/black-king.png")),
         transform,
