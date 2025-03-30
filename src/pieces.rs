@@ -76,6 +76,17 @@ impl Pieces {
   pub fn pieces_concat(&self) -> u64 {
     return self.pawns + self.knights + self.bishops + self.rooks + self.queens + self.king;
   }
+
+  pub fn get_value(&self) -> i32 {
+    let mut total = 0;
+    let lookup = [1, 3, 3, 5, 7, 1000];
+
+    for (i, piece) in self.pieces_as_array().iter().enumerate() {
+      total += lookup[i] * piece.count_zeros();
+    }
+
+    total as i32
+  }
 }
 
 //moves & state
@@ -143,4 +154,5 @@ impl Pieces {
   pub fn is_king(&self, at_mask: u64) -> bool {
     return self.king & at_mask > 0;
   }
+
 }
