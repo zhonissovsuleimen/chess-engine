@@ -38,50 +38,52 @@ impl Board {
       &mut self.black
     };
 
-    for i in 0..6 {
-      let mut new_moves_mask: u64 = 0;
-      match i {
-        0 => {
-          let shift_fn = if white_to_move {
-            |mask: u64, shift: u32| mask.checked_shr(shift).unwrap_or(0)
-          } else {
-            |mask: u64, shift: u32| mask.checked_shl(shift).unwrap_or(0)
-          };
+    let mut new_moves_mask: u64 = 0;
 
-          let move_one = shift_fn(from_mask, 8);
-          let move_two = shift_fn(from_mask, 16);
-          let both_moves = move_one | move_two;
+    if selected_pieces.is_pawn(from_mask) {
+      let mut pawn_moves = 0;
+      let shift_fn = if white_to_move {
+        |mask: u64, shift: u32| mask.checked_shr(shift).unwrap_or(0)
+      } else {
+        |mask: u64, shift: u32| mask.checked_shl(shift).unwrap_or(0)
+      };
 
-          if emptiness & move_one > 0 {
-            new_moves_mask += move_one;
-          }
+      let move_one = shift_fn(from_mask, 8);
+      let move_two = shift_fn(from_mask, 16);
+      let both_moves = move_one | move_two;
 
-          if emptiness & both_moves > 0 && selected_pieces.can_advance(from_mask) {
-            new_moves_mask += move_two;
-            selected_pieces.remove_advance(from_mask);
-          }
-        }
-        5 => {
-          new_moves_mask += from_mask.checked_shr(9).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shr(8).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shr(7).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shr(1).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shl(1).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shl(7).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shl(8).unwrap_or(0);
-          new_moves_mask += from_mask.checked_shl(9).unwrap_or(0);
+      pawn_moves += move_one & emptiness;
 
-          new_moves_mask &= emptiness;
-        }
-        _ => {}
+      //todo: bitwise trickery
+      if emptiness & both_moves > 0 && selected_pieces.can_advance(from_mask) {
+        pawn_moves += move_two;
+        selected_pieces.remove_advance(from_mask);
       }
 
-      if to_mask & new_moves_mask > 0 {
-        selected_pieces.r#move(from_mask, to_mask);
+      new_moves_mask = pawn_moves;
+    } else if selected_pieces.is_bishop(from_mask) {
+    } else if selected_pieces.is_knight(from_mask) {
+    } else if selected_pieces.is_rook(from_mask) {
+    } else if selected_pieces.is_queen(from_mask) {
+    } else if selected_pieces.is_king(from_mask) {
+      let mut king_moves = 0;
+      king_moves += from_mask.checked_shr(9).unwrap_or(0);
+      king_moves += from_mask.checked_shr(8).unwrap_or(0);
+      king_moves += from_mask.checked_shr(7).unwrap_or(0);
+      king_moves += from_mask.checked_shr(1).unwrap_or(0);
+      king_moves += from_mask.checked_shl(1).unwrap_or(0);
+      king_moves += from_mask.checked_shl(7).unwrap_or(0);
+      king_moves += from_mask.checked_shl(8).unwrap_or(0);
+      king_moves += from_mask.checked_shl(9).unwrap_or(0);
 
-        self.white_to_move = !self.white_to_move;
-        return true;
-      }
+      new_moves_mask = king_moves & emptiness;
+    }
+
+    if to_mask & new_moves_mask > 0 {
+      selected_pieces.r#move(from_mask, to_mask);
+
+      self.white_to_move = !self.white_to_move;
+      return true;
     }
 
     return false;
