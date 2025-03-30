@@ -61,6 +61,18 @@ impl Board {
             selected_pieces.remove_advance(from_mask);
           }
         }
+        5 => {
+          new_moves_mask += from_mask.checked_shr(9).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shr(8).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shr(7).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shr(1).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shl(1).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shl(7).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shl(8).unwrap_or(0);
+          new_moves_mask += from_mask.checked_shl(9).unwrap_or(0);
+
+          new_moves_mask &= emptiness;
+        }
         _ => {}
       }
 
