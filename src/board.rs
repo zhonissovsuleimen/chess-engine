@@ -136,6 +136,31 @@ impl Board {
     return !(self.white.pieces_concat() | self.black.pieces_concat());
   }
 
+  fn is_pawn(&self, at_mask: u64) -> bool {
+    return self.white.is_pawn(at_mask) || self.black.is_pawn(at_mask);
+  }
+
+  pub fn is_knight(&self, at_mask: u64) -> bool {
+    return self.white.is_knight(at_mask) || self.black.is_knight(at_mask);
+  }
+
+  pub fn is_bishop(&self, at_mask: u64) -> bool {
+    return self.white.is_bishop(at_mask) || self.black.is_bishop(at_mask);
+  }
+
+  pub fn is_rook(&self, at_mask: u64) -> bool {
+    return self.white.is_rook(at_mask) || self.black.is_rook(at_mask);
+  }
+
+  pub fn is_queen(&self, at_mask: u64) -> bool {
+    return self.white.is_queen(at_mask) || self.black.is_queen(at_mask);
+  }
+
+  pub fn is_king(&self, at_mask: u64) -> bool {
+    return self.white.is_king(at_mask) || self.black.is_king(at_mask);
+  }
+
+
   pub fn from_fen(fen_string: &str) -> Board {
     let mut board = Board {
       white_to_move: true,
