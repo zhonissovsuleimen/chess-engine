@@ -40,9 +40,9 @@ impl Board {
 
     if (to_mask & new_moves_mask) > 0 {
       if self.white_to_move {
-        self.white.r#move(from_mask, to_mask);
+        self.white.move_piece(from_mask, to_mask);
       } else {
-        self.black.r#move(from_mask, to_mask);
+        self.black.move_piece(from_mask, to_mask);
       }
 
       self.white_to_move = !self.white_to_move;

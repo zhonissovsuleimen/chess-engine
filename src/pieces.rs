@@ -80,7 +80,7 @@ impl Pieces {
 
 //moves & state
 impl Pieces {
-  pub fn r#move(&mut self, from_mask: u64, to_mask: u64) {
+  pub fn move_piece(&mut self, from_mask: u64, to_mask: u64) {
     //todo: branchless bitwise trickery
     if self.is_pawn(from_mask) {
       self.pawns -= from_mask;
@@ -100,6 +100,12 @@ impl Pieces {
     } else if self.is_king(from_mask) {
       self.king -= from_mask;
       self.king += to_mask;
+    }
+  }
+
+  pub fn remove_piece(&mut self, at_mask: u64) {
+    for piece in self.pieces_as_mut_array() {
+      *piece &= !at_mask;
     }
   }
 
