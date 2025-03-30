@@ -133,7 +133,7 @@ impl Board {
   }
 
   fn empty_mask(&self) -> u64 {
-    return !(self.white.pieces_concat() | self.white.pieces_concat());
+    return !(self.white.pieces_concat() | self.black.pieces_concat());
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
