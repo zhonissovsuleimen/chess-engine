@@ -153,6 +153,10 @@ impl Board {
     pawn_move
   }
 
+  pub fn get_piece_delta(&self) -> i32 {
+    self.white.get_value() - self.black.get_value()
+  }
+
   pub fn from_fen(fen_string: &str) -> Board {
     let mut board = Board {
       white_to_move: true,
