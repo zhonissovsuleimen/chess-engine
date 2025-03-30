@@ -62,6 +62,18 @@ impl Board {
 
       new_moves_mask = pawn_moves;
     } else if selected_pieces.is_knight(from_mask) {
+      let mut knight_moves = 0;
+
+      knight_moves += from_mask.checked_shr(17).unwrap_or(0);
+      knight_moves += from_mask.checked_shr(15).unwrap_or(0);
+      knight_moves += from_mask.checked_shr(10).unwrap_or(0);
+      knight_moves += from_mask.checked_shr(6).unwrap_or(0);
+      knight_moves += from_mask.checked_shl(6).unwrap_or(0);
+      knight_moves += from_mask.checked_shl(10).unwrap_or(0);
+      knight_moves += from_mask.checked_shl(15).unwrap_or(0);
+      knight_moves += from_mask.checked_shl(17).unwrap_or(0);
+
+      new_moves_mask = knight_moves & emptiness;
     } else if selected_pieces.is_bishop(from_mask) {
     } else if selected_pieces.is_rook(from_mask) {
     } else if selected_pieces.is_queen(from_mask) {
