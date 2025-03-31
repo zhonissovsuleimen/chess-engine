@@ -6,15 +6,44 @@ pub struct Board {
   pub white_to_move: bool,
   pub white: Pieces,
   pub black: Pieces,
+
+  white_turn_mask: u64,
+  empty_mask: u64,
+  enemy_mask: u64,
+  advance_mask: u64,
 }
 
 impl Board {
+  pub fn empty() -> Board {
+    let mut board = Board {
+      white_to_move: true,
+      white: Pieces::empty(),
+      black: Pieces::empty(),
+
+      white_turn_mask: 0,
+      empty_mask: 0,
+      enemy_mask: 0,
+      advance_mask: 0,
+    };
+
+    board.update_masks();
+    board
+  }
+
   pub fn default() -> Board {
-    Board {
+    let mut board = Board {
       white_to_move: true,
       white: Pieces::white(),
       black: Pieces::black(),
-    }
+
+      white_turn_mask: 0,
+      empty_mask: 0,
+      enemy_mask: 0,
+      advance_mask: 0,
+    };
+
+    board.update_masks();
+    board
   }
 
   pub fn move_piece(&mut self, from_id: usize, to_id: usize) -> bool {
@@ -67,62 +96,59 @@ impl Board {
       }
 
       self.white_to_move = !self.white_to_move;
+      self.update_masks();
       return true;
     }
 
     return false;
   }
 
-  fn is_empty(&self, at_mask: u64) -> bool {
-    return self.white.is_empty(at_mask) && self.black.is_empty(at_mask);
-  }
-
-  fn empty_mask(&self) -> u64 {
-    return !(self.white.pieces_concat() | self.black.pieces_concat());
-  }
-
-  fn advance_mask(&self) -> u64 {
-    return self.white.pawns_advance | self.black.pawns_advance;
+  fn update_masks(&mut self) {
+    self.white_turn_mask = !((self.white_to_move as u64).overflowing_sub(1).0);
+    self.empty_mask = !(self.white.pieces_concat() | self.black.pieces_concat());
+    self.enemy_mask = self.white_turn_mask & self.black.pieces_concat()
+      | !self.white_turn_mask & self.white.pieces_concat();
+    self.advance_mask = self.white.pawns_advance | self.black.pawns_advance;
   }
 
   fn is_pawn(&self, at_mask: u64) -> bool {
     return self.white.is_pawn(at_mask) || self.black.is_pawn(at_mask);
   }
 
-  pub fn is_knight(&self, at_mask: u64) -> bool {
+  fn is_knight(&self, at_mask: u64) -> bool {
     return self.white.is_knight(at_mask) || self.black.is_knight(at_mask);
   }
 
-  pub fn is_bishop(&self, at_mask: u64) -> bool {
+  fn is_bishop(&self, at_mask: u64) -> bool {
     return self.white.is_bishop(at_mask) || self.black.is_bishop(at_mask);
   }
 
-  pub fn is_rook(&self, at_mask: u64) -> bool {
+  fn is_rook(&self, at_mask: u64) -> bool {
     return self.white.is_rook(at_mask) || self.black.is_rook(at_mask);
   }
 
-  pub fn is_queen(&self, at_mask: u64) -> bool {
+  fn is_queen(&self, at_mask: u64) -> bool {
     return self.white.is_queen(at_mask) || self.black.is_queen(at_mask);
   }
 
-  pub fn is_king(&self, at_mask: u64) -> bool {
+  fn is_king(&self, at_mask: u64) -> bool {
     return self.white.is_king(at_mask) || self.black.is_king(at_mask);
   }
 
-  pub fn gen_pawn_moves(&self, at_mask: u64) -> u64 {
-    let mut pawn_move = 0;
+  fn gen_pawn_moves(&self, at_mask: u64) -> u64 {
+    let mut pawn_move;
 
     if self.white_to_move {
-      pawn_move = at_mask.checked_shr(8).unwrap_or(0) & self.empty_mask();
+      pawn_move = at_mask.checked_shr(8).unwrap_or(0) & self.empty_mask;
     } else {
-      pawn_move = at_mask.checked_shl(8).unwrap_or(0) & self.empty_mask();
+      pawn_move = at_mask.checked_shl(8).unwrap_or(0) & self.empty_mask;
     }
 
     pawn_move |= self.gen_pawn_capturing_moves(at_mask);
     return pawn_move;
   }
 
-  pub fn gen_pawn_advence_move(&self, at_mask: u64) -> u64 {
+  fn gen_pawn_advence_move(&self, at_mask: u64) -> u64 {
     let pawn_move;
     let (move_one, move_two) = if self.white_to_move {
       (
@@ -138,13 +164,13 @@ impl Board {
 
     let both_moves = move_one | move_two;
 
-    let can_advance = (at_mask & self.advance_mask()) > 0;
-    pawn_move = (both_moves & self.empty_mask() & move_two) * can_advance as u64;
+    let can_advance = (at_mask & self.advance_mask) > 0;
+    pawn_move = (both_moves & self.empty_mask & move_two) * can_advance as u64;
 
     pawn_move
   }
 
-  pub fn gen_pawn_capturing_moves(&self, at_mask: u64) -> u64 {
+  fn gen_pawn_capturing_moves(&self, at_mask: u64) -> u64 {
     let pawn_move;
 
     let x = at_mask.trailing_zeros();
@@ -153,21 +179,21 @@ impl Board {
     if self.white_to_move {
       let enemy_to_left_mask = at_mask.checked_shr(9).unwrap_or(0);
       let left_edge_check = (x != 0) as u64;
-      let can_take_left_mask = (enemy_to_left_mask & !self.empty_mask()) * left_edge_check;
+      let can_take_left_mask = (enemy_to_left_mask & !self.empty_mask) * left_edge_check;
 
       let enemy_to_right_mask = at_mask.checked_shr(7).unwrap_or(0);
       let right_edge_check = (x != 7) as u64;
-      let can_take_right_mask = (enemy_to_right_mask & !self.empty_mask()) * right_edge_check;
+      let can_take_right_mask = (enemy_to_right_mask & !self.empty_mask) * right_edge_check;
 
       pawn_move = can_take_left_mask + can_take_right_mask;
     } else {
       let enemy_to_left_mask = at_mask.checked_shl(7).unwrap_or(0);
       let left_edge_check = (x != 0) as u64;
-      let can_take_left_mask = (enemy_to_left_mask & !self.empty_mask()) * left_edge_check;
+      let can_take_left_mask = (enemy_to_left_mask & !self.empty_mask) * left_edge_check;
 
       let enemy_to_right_mask = at_mask.checked_shl(9).unwrap_or(0);
       let right_edge_check = (x != 7) as u64;
-      let can_take_right_mask = (enemy_to_right_mask & !self.empty_mask()) * right_edge_check;
+      let can_take_right_mask = (enemy_to_right_mask & !self.empty_mask) * right_edge_check;
 
       pawn_move = can_take_left_mask + can_take_right_mask;
     }
@@ -175,7 +201,7 @@ impl Board {
     pawn_move
   }
 
-  pub fn gen_knight_moves(&self, at_mask: u64) -> u64 {
+  fn gen_knight_moves(&self, at_mask: u64) -> u64 {
     let mut moves = 0;
 
     let id = at_mask.trailing_zeros() as i32;
@@ -202,18 +228,14 @@ impl Board {
       let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
 
       let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
-      let white_turn_mask = !((self.white_to_move as u64).overflowing_sub(1).0); // all bits are set to 1 if white, and 0 if all are black
-      let empty_or_enemy_mask = self.empty_mask()
-        | (white_turn_mask & self.black.pieces_concat()
-          | !white_turn_mask & self.white.pieces_concat());
 
-      moves |= new_move_mask & empty_or_enemy_mask;
+      moves |= new_move_mask & (self.empty_mask | self.empty_mask);
     }
 
     moves
   }
 
-  pub fn gen_bishop_moves(&self, at_mask: u64) -> u64 {
+  fn gen_bishop_moves(&self, at_mask: u64) -> u64 {
     let mut moves = 0;
 
     let id = at_mask.trailing_zeros() as i32;
@@ -234,18 +256,15 @@ impl Board {
         let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
         let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
 
-        let white_turn_mask = !((self.white_to_move as u64).overflowing_sub(1).0); // all bits are set to 1 if white, and 0 if all are black
-        let enemy_mask = white_turn_mask & self.black.pieces_concat() | !white_turn_mask & self.white.pieces_concat();
-
-        let capture = new_move_mask & enemy_mask > 0;
+        let capture = new_move_mask & self.enemy_mask > 0;
 
         if !within_board {
           return diag_moves;
         } else if capture {
-          diag_moves |= new_move_mask & enemy_mask;
+          diag_moves |= new_move_mask & self.enemy_mask;
           return diag_moves;
         } else {
-          diag_moves |= new_move_mask & self.empty_mask();
+          diag_moves |= new_move_mask & self.empty_mask;
         }
 
         current = (current.0 + dx, current.1 + dy);
@@ -265,11 +284,7 @@ impl Board {
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
-    let mut board = Board {
-      white_to_move: true,
-      white: Pieces::empty(),
-      black: Pieces::empty(),
-    };
+    let mut board = Board::empty();
 
     let slices: Vec<&str> = fen_string.split_whitespace().collect();
     assert_eq!(slices.len(), 6);
