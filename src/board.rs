@@ -79,30 +79,15 @@ impl Board {
         }
       }
     } else if self.is_knight(from_mask) {
-      let moves = self.gen_knight_moves(from_mask);
-      if moves & to_mask > 0 {
-        new_moves_mask += moves;
-      }
+      new_moves_mask |= self.gen_knight_moves(from_mask);
     } else if self.is_bishop(from_mask) {
-      let moves = self.gen_bishop_moves(from_mask);
-      if moves & to_mask > 0 {
-        new_moves_mask += moves;
-      }
+      new_moves_mask |= self.gen_bishop_moves(from_mask);
     } else if self.is_rook(from_mask) {
-      let moves = self.gen_rook_moves(from_mask);
-      if moves & to_mask > 0 {
-        new_moves_mask += moves;
-      }
+      new_moves_mask |= self.gen_rook_moves(from_mask);
     } else if self.is_queen(from_mask) {
-      let moves = self.gen_queen_moves(from_mask);
-      if moves & to_mask > 0 {
-        new_moves_mask += moves;
-      }
+      new_moves_mask |= self.gen_queen_moves(from_mask);
     } else if self.is_king(from_mask) {
-      let moves = self.gen_king_moves(from_mask);
-      if moves & to_mask > 0 {
-        new_moves_mask += moves;
-      }
+      new_moves_mask |= self.gen_king_moves(from_mask);
     }
 
     if (to_mask & new_moves_mask) > 0 {
