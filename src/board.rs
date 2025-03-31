@@ -94,6 +94,11 @@ impl Board {
       if moves & to_mask > 0 {
         new_moves_mask += moves;
       }
+    } else if self.is_king(from_mask) {
+      let moves = self.gen_king_moves(from_mask);
+      if moves & to_mask > 0 {
+        new_moves_mask += moves;
+      }
     }
 
     if (to_mask & new_moves_mask) > 0 {
@@ -247,9 +252,24 @@ impl Board {
 
     moves
   }
-  
+
   fn gen_queen_moves(&self, at_mask: u64) -> u64 {
     self.gen_bishop_moves(at_mask) | self.gen_rook_moves(at_mask)
+  }
+
+  fn gen_king_moves(&self, at_mask: u64) -> u64 {
+    let offsets = [
+      (-1, -1),
+      (0, -1),
+      (1, -1),
+      (-1, 0),
+      (1, 0),
+      (-1, 1),
+      (0, 1),
+      (1, 1),
+    ].to_vec();
+
+    self.gen_offset_moves(at_mask, offsets)
   }
 
   fn gen_offset_moves(&self, at_mask: u64, offsets: Vec<(i32, i32)>) -> u64 {
