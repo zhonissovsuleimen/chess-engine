@@ -89,6 +89,11 @@ impl Board {
       if moves & to_mask > 0 {
         new_moves_mask += moves;
       }
+    } else if self.is_queen(from_mask) {
+      let moves = self.gen_queen_moves(from_mask);
+      if moves & to_mask > 0 {
+        new_moves_mask += moves;
+      }
     }
 
     if (to_mask & new_moves_mask) > 0 {
@@ -260,6 +265,10 @@ impl Board {
     moves |= self.gen_iterative_moves(at_mask, 0, 1);
 
     moves
+  }
+  
+  fn gen_queen_moves(&self, at_mask: u64) -> u64 {
+    self.gen_bishop_moves(at_mask) | self.gen_rook_moves(at_mask)
   }
 
   fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
