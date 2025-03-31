@@ -33,7 +33,7 @@ impl Board {
     let mut new_moves_mask = 0;
 
     if self.is_pawn(from_mask) {
-      let move_one = self.gen_pawn_move(from_mask);
+      let move_one = self.gen_pawn_moves(from_mask);
       let move_two = self.gen_pawn_advence_move(from_mask);
 
       new_moves_mask += move_one & to_mask;
@@ -105,7 +105,7 @@ impl Board {
     return self.white.is_king(at_mask) || self.black.is_king(at_mask);
   }
 
-  pub fn gen_pawn_move(&self, at_mask: u64) -> u64 {
+  pub fn gen_pawn_moves(&self, at_mask: u64) -> u64 {
     let mut pawn_move = 0;
 
     if self.white_to_move {
