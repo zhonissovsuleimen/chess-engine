@@ -84,6 +84,11 @@ impl Board {
       if moves & to_mask > 0 {
         new_moves_mask += moves;
       }
+    } else if self.is_rook(from_mask) {
+      let moves = self.gen_rook_moves(from_mask);
+      if moves & to_mask > 0 {
+        new_moves_mask += moves;
+      }
     }
 
     if (to_mask & new_moves_mask) > 0 {
@@ -246,6 +251,17 @@ impl Board {
     moves
   }
 
+  fn gen_rook_moves(&self, at_mask: u64) -> u64 {
+    let mut moves = 0;
+
+    moves |= self.gen_iterative_moves(at_mask, -1, 0);
+    moves |= self.gen_iterative_moves(at_mask, 0, -1);
+    moves |= self.gen_iterative_moves(at_mask, 1, 0);
+    moves |= self.gen_iterative_moves(at_mask, 0, 1);
+
+    moves
+  }
+
   fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
     let mut moves = 0;
 
@@ -253,31 +269,31 @@ impl Board {
     let x = id % 8;
     let y = id / 8;
 
-      let mut current = (dx, dy);
-      loop {
-        let new_x = x + current.0;
-        let new_y = y + current.1;
-        let new_pos = new_x + new_y * 8;
+    let mut current = (dx, dy);
+    loop {
+      let new_x = x + current.0;
+      let new_y = y + current.1;
+      let new_pos = new_x + new_y * 8;
 
-        let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
+      let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
 
-        let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
-        let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
+      let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
+      let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
 
-        let capture = new_move_mask & self.enemy_mask > 0;
+      let capture = new_move_mask & self.enemy_mask > 0;
       let friendly_piece = new_move_mask & !(self.enemy_mask | self.empty_mask) > 0;
 
       if !within_board || friendly_piece {
         return moves;
-        } else if capture {
+      } else if capture {
         moves |= new_move_mask & self.enemy_mask;
         return moves;
-        } else {
+      } else {
         moves |= new_move_mask & self.empty_mask;
-        }
-
-        current = (current.0 + dx, current.1 + dy);
       }
+
+      current = (current.0 + dx, current.1 + dy);
+    }
   }
 
   pub fn get_piece_delta(&self) -> i32 {
