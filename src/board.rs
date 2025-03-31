@@ -229,7 +229,7 @@ impl Board {
 
       let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
 
-      moves |= new_move_mask & (self.empty_mask | self.empty_mask);
+      moves |= new_move_mask & (self.empty_mask | self.enemy_mask);
     }
 
     moves
@@ -238,14 +238,22 @@ impl Board {
   fn gen_bishop_moves(&self, at_mask: u64) -> u64 {
     let mut moves = 0;
 
+    moves |= self.gen_iterative_moves(at_mask, -1, -1);
+    moves |= self.gen_iterative_moves(at_mask, 1, -1);
+    moves |= self.gen_iterative_moves(at_mask, -1, 1);
+    moves |= self.gen_iterative_moves(at_mask, 1, 1);
+
+    moves
+  }
+
+  fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
+    let mut moves = 0;
+
     let id = at_mask.trailing_zeros() as i32;
     let x = id % 8;
     let y = id / 8;
 
-    let gen_diag = |dx: i32, dy: i32| -> u64 {
-      let mut diag_moves = 0;
       let mut current = (dx, dy);
-
       loop {
         let new_x = x + current.0;
         let new_y = y + current.1;
@@ -257,26 +265,19 @@ impl Board {
         let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
 
         let capture = new_move_mask & self.enemy_mask > 0;
+      let friendly_piece = new_move_mask & !(self.enemy_mask | self.empty_mask) > 0;
 
-        if !within_board {
-          return diag_moves;
+      if !within_board || friendly_piece {
+        return moves;
         } else if capture {
-          diag_moves |= new_move_mask & self.enemy_mask;
-          return diag_moves;
+        moves |= new_move_mask & self.enemy_mask;
+        return moves;
         } else {
-          diag_moves |= new_move_mask & self.empty_mask;
+        moves |= new_move_mask & self.empty_mask;
         }
 
         current = (current.0 + dx, current.1 + dy);
       }
-    };
-
-    moves |= gen_diag(-1, -1);
-    moves |= gen_diag(1, -1);
-    moves |= gen_diag(-1, 1);
-    moves |= gen_diag(1, 1);
-
-    moves
   }
 
   pub fn get_piece_delta(&self) -> i32 {
