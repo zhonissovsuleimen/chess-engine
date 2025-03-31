@@ -212,12 +212,6 @@ impl Board {
   }
 
   fn gen_knight_moves(&self, at_mask: u64) -> u64 {
-    let mut moves = 0;
-
-    let id = at_mask.trailing_zeros() as i32;
-    let x = id % 8;
-    let y = id / 8;
-
     let offsets = [
       (-1, -2),
       (1, -2),
@@ -227,22 +221,9 @@ impl Board {
       (2, 1),
       (-1, 2),
       (1, 2),
-    ];
+    ].to_vec();
 
-    for (dx, dy) in offsets {
-      let new_x = x + dx;
-      let new_y = y + dy;
-      let new_pos = new_x + new_y * 8;
-
-      let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
-      let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
-
-      let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
-
-      moves |= new_move_mask & (self.empty_mask | self.enemy_mask);
-    }
-
-    moves
+    self.gen_offset_moves(at_mask, offsets)
   }
 
   fn gen_bishop_moves(&self, at_mask: u64) -> u64 {
@@ -269,6 +250,29 @@ impl Board {
   
   fn gen_queen_moves(&self, at_mask: u64) -> u64 {
     self.gen_bishop_moves(at_mask) | self.gen_rook_moves(at_mask)
+  }
+
+  fn gen_offset_moves(&self, at_mask: u64, offsets: Vec<(i32, i32)>) -> u64 {
+    let mut moves = 0;
+
+    let id = at_mask.trailing_zeros() as i32;
+    let x = id % 8;
+    let y = id / 8;
+
+    for (dx, dy) in offsets {
+      let new_x = x + dx;
+      let new_y = y + dy;
+      let new_pos = new_x + new_y * 8;
+
+      let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
+      let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
+
+      let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
+
+      moves |= new_move_mask & (self.empty_mask | self.enemy_mask);
+    }
+
+    moves
   }
 
   fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
