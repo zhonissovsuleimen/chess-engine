@@ -226,7 +226,8 @@ impl Board {
       (2, 1),
       (-1, 2),
       (1, 2),
-    ].to_vec();
+    ]
+    .to_vec();
 
     self.gen_offset_moves(at_mask, offsets)
   }
@@ -267,7 +268,8 @@ impl Board {
       (-1, 1),
       (0, 1),
       (1, 1),
-    ].to_vec();
+    ]
+    .to_vec();
 
     self.gen_offset_moves(at_mask, offsets)
   }
@@ -389,6 +391,7 @@ impl Board {
       wrong_char => panic!("Unexpected character ({wrong_char}) in active color data"),
     }
 
+    board.update_masks();
     board
   }
 }
