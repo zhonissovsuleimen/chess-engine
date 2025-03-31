@@ -79,7 +79,7 @@ impl Pieces {
 
   pub fn get_value(&self) -> i32 {
     let mut total = 0;
-    let lookup = [1, 3, 3, 5, 7, 1000];
+    let lookup = [1, 3, 3, 5, 9, 1000];
 
     for (i, piece) in self.pieces_as_array().iter().enumerate() {
       total += lookup[i] * piece.count_zeros();
@@ -126,10 +126,6 @@ impl Pieces {
 
   pub fn is_empty(&self, at_mask: u64) -> bool {
     self.pieces_concat() & at_mask == 0
-  }
-
-  pub fn can_advance(&self, at_mask: u64) -> bool {
-    return (self.pawns & self.pawns_advance & at_mask) > 0;
   }
 
   pub fn is_pawn(&self, at_mask: u64) -> bool {
