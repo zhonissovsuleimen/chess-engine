@@ -45,7 +45,13 @@ impl Board {
           self.black.remove_advance(from_mask);
         }
       }
+    } else if self.is_knight(from_mask) {
+      let moves = self.gen_knight_moves(from_mask);
+      if moves & to_mask > 0 {
+        new_moves_mask += moves;
+      }
     }
+
 
     if (to_mask & new_moves_mask) > 0 {
       if self.white_to_move {
@@ -163,6 +169,42 @@ impl Board {
     }
 
     pawn_move
+  }
+
+  pub fn gen_knight_moves(&self, at_mask: u64) -> u64 {
+    let mut moves = 0;
+
+    let id = at_mask.trailing_zeros() as i32;
+    let x = id % 8;
+    let y = id / 8;
+
+    let offsets = [
+      (-1, -2),
+      (1, -2),
+      (-2, -1),
+      (2, -1),
+      (-2, 1),
+      (2, 1),
+      (-1, 2),
+      (1, 2),
+    ];
+
+    for (dx, dy) in offsets {
+      let new_x = x + dx;
+      let new_y = y + dy;
+      let new_pos = new_x + new_y * 8;
+      
+      let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
+      let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
+     
+      let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
+      let white_turn_mask = !((self.white_to_move as u64).overflowing_sub(1).0); // all bits are set to 1 if white, and 0 if all are black
+      let empty_or_enemy_mask = self.empty_mask() | (white_turn_mask & self.black.pieces_concat() | !white_turn_mask & self.white.pieces_concat());
+
+      moves |= new_move_mask & empty_or_enemy_mask;
+    }
+
+    moves
   }
 
   pub fn get_piece_delta(&self) -> i32 {
