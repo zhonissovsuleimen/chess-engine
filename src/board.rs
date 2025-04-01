@@ -13,7 +13,7 @@ pub struct Board {
   empty_mask: u64,
   enemy_mask: u64,
   advance_mask: u64,
-  en_pessant_mask: u64,
+  en_passant_mask: u64,
 }
 
 //constructor
@@ -28,7 +28,7 @@ impl Board {
       empty_mask: 0,
       enemy_mask: 0,
       advance_mask: 0,
-      en_pessant_mask: 0,
+      en_passant_mask: 0,
     };
 
     board.update_masks();
@@ -45,7 +45,7 @@ impl Board {
       empty_mask: 0,
       enemy_mask: 0,
       advance_mask: 0,
-      en_pessant_mask: 0,
+      en_passant_mask: 0,
     };
 
     board.update_masks();
@@ -137,7 +137,7 @@ impl Board {
       new_moves_mask |= move_one & to_mask;
       if move_two & to_mask > 0 {
         new_moves_mask += move_two;
-        self.en_pessant_mask = move_one;
+        self.en_passant_mask = move_one;
         if self.white_to_move {
           self.white.remove_advance(from_mask);
         } else {
@@ -165,16 +165,16 @@ impl Board {
         self.black.move_piece(from_mask, to_mask);
       }
 
-      if to_mask & self.en_pessant_mask > 0 {
+      if to_mask & self.en_passant_mask > 0 {
         if self.white_to_move {
-          let pawn_mask = self.en_pessant_mask.checked_shl(8).unwrap_or(0);
+          let pawn_mask = self.en_passant_mask.checked_shl(8).unwrap_or(0);
           self.black.remove_piece(pawn_mask);
         } else {
-          let pawn_mask = self.en_pessant_mask.checked_shr(8).unwrap_or(0);
+          let pawn_mask = self.en_passant_mask.checked_shr(8).unwrap_or(0);
           self.white.remove_piece(pawn_mask);
         }
 
-        self.en_pessant_mask = 0;
+        self.en_passant_mask = 0;
       }
 
       self.white_to_move = !self.white_to_move;
@@ -249,7 +249,7 @@ impl Board {
     let right_edge_check = (x != 7) as u64;
     let take_right_mask = right_edge_check * (enemy_to_right_mask & self.enemy_mask);
 
-    let enp_id = self.en_pessant_mask.trailing_zeros() as i32;
+    let enp_id = self.en_passant_mask.trailing_zeros() as i32;
     let enp_x = enp_id % 8;
     let enp_y = enp_id / 8;
 
@@ -257,7 +257,7 @@ impl Board {
     let can_enp_y = y - enp_y == 1 - 2 * !self.white_to_move as i32;
     let can_enp = (can_enp_x && can_enp_y) as u64;
 
-    pawn_move = take_left_mask | take_right_mask | (can_enp * self.en_pessant_mask);
+    pawn_move = take_left_mask | take_right_mask | (can_enp * self.en_passant_mask);
 
     pawn_move
   }
