@@ -1,10 +1,19 @@
 //TODO: castiling, pin, checks, checkmates?
-
 use crate::pieces::Pieces;
 use bevy::ecs::system::Resource;
 
+
+#[derive(PartialEq)]
+enum Status {
+  Playing,
+  WhiteWon,
+  BlackWon,
+}
+
+
 #[derive(Resource)]
 pub struct Board {
+  pub status: Status,
   pub white_to_move: bool,
   pub white: Pieces,
   pub black: Pieces,
@@ -20,6 +29,7 @@ pub struct Board {
 impl Board {
   pub fn empty() -> Board {
     let mut board = Board {
+      status: Status::Playing,
       white_to_move: true,
       white: Pieces::empty(),
       black: Pieces::empty(),
@@ -37,6 +47,7 @@ impl Board {
 
   pub fn default() -> Board {
     let mut board = Board {
+      status: Status::Playing,
       white_to_move: true,
       white: Pieces::white(),
       black: Pieces::black(),
@@ -153,6 +164,10 @@ impl Board {
 
     let from_mask: u64 = 1 << from_id;
     let to_mask: u64 = 1 << to_id;
+
+    if self.status != Status::Playing {
+      return false;
+    }
 
     if (self.white_to_move && self.white.is_empty(from_mask))
       || (!self.white_to_move && self.black.is_empty(from_mask))
