@@ -13,7 +13,7 @@ pub enum Status {
 #[derive(Default, Resource)]
 pub struct Board {
   pub status: Status,
-  pub white_to_move: bool,
+  pub white_turn: bool,
   pub white: Pieces,
   pub black: Pieces,
 
@@ -103,8 +103,8 @@ impl Board {
     }
 
     match slices[1] {
-      "w" => board.white_to_move = true,
-      "b" => board.white_to_move = false,
+      "w" => board.white_turn = true,
+      "b" => board.white_turn = false,
       wrong_char => panic!("Unexpected character ({wrong_char}) in active color data"),
     }
 
@@ -157,8 +157,8 @@ impl Board {
       return false;
     }
 
-    if (self.white_to_move && self.white.is_empty(from_mask))
-      || (!self.white_to_move && self.black.is_empty(from_mask))
+    if (self.white_turn && self.white.is_empty(from_mask))
+      || (!self.white_turn && self.black.is_empty(from_mask))
     {
       return false;
     }
@@ -173,7 +173,7 @@ impl Board {
       if move_two & to_mask > 0 {
         new_moves_mask += move_two;
         self.en_passant_mask = move_one;
-        if self.white_to_move {
+        if self.white_turn {
           self.white.remove_advance(from_mask);
         } else {
           self.black.remove_advance(from_mask);
@@ -192,7 +192,7 @@ impl Board {
     }
 
     if (to_mask & new_moves_mask) > 0 {
-      if self.white_to_move {
+      if self.white_turn {
         self.black.remove_piece(to_mask);
         self.white.move_piece(from_mask, to_mask);
       } else {
@@ -201,7 +201,7 @@ impl Board {
       }
 
       if to_mask & self.en_passant_mask > 0 {
-        if self.white_to_move {
+        if self.white_turn {
           let pawn_mask = self.en_passant_mask.checked_shl(8).unwrap_or(0);
           self.black.remove_piece(pawn_mask);
         } else {
@@ -212,7 +212,7 @@ impl Board {
         self.en_passant_mask = 0;
       }
 
-      self.white_to_move = !self.white_to_move;
+      self.white_turn = !self.white_turn;
       self.update_masks();
       return true;
     }
@@ -221,7 +221,7 @@ impl Board {
   }
 
   fn update_masks(&mut self) {
-    self.white_turn_mask = !((self.white_to_move as u64).overflowing_sub(1).0);
+    self.white_turn_mask = !((self.white_turn as u64).overflowing_sub(1).0);
     self.empty_mask = !(self.white.pieces_concat() | self.black.pieces_concat());
     self.enemy_mask = self.white_turn_mask & self.black.pieces_concat()
       | !self.white_turn_mask & self.white.pieces_concat();
@@ -245,7 +245,7 @@ impl Board {
 
   fn gen_pawn_advence_move(&self, at_mask: u64) -> u64 {
     let pawn_move;
-    let (move_one, move_two) = if self.white_to_move {
+    let (move_one, move_two) = if self.white_turn {
       (
         at_mask.checked_shr(8).unwrap_or(0),
         at_mask.checked_shr(16).unwrap_or(0),
@@ -289,7 +289,7 @@ impl Board {
     let enp_y = enp_id / 8;
 
     let can_enp_x = (enp_x - x).abs() == 1;
-    let can_enp_y = y - enp_y == 1 - 2 * !self.white_to_move as i32;
+    let can_enp_y = y - enp_y == 1 - 2 * !self.white_turn as i32;
     let can_enp = (can_enp_x && can_enp_y) as u64;
 
     pawn_move = take_left_mask | take_right_mask | (can_enp * self.en_passant_mask);

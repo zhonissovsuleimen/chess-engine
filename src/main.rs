@@ -91,7 +91,7 @@ fn detect_piece(
     }
     None if mouse.just_pressed => {
       for (entity, sprite, transform, is_white) in &sprite_query {
-        if is_white.0 != board.white_to_move {
+        if is_white.0 != board.white_turn {
           continue;
         }
 
