@@ -53,6 +53,7 @@ impl Board {
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
+    //todo: pawn advance mask depending on rank
     let mut board = Board::empty();
 
     let slices: Vec<&str> = fen_string.split_whitespace().collect();
@@ -106,6 +107,37 @@ impl Board {
       "w" => board.white_to_move = true,
       "b" => board.white_to_move = false,
       wrong_char => panic!("Unexpected character ({wrong_char}) in active color data"),
+    }
+
+    if slices[3] != "-" {
+      let enp_chars = slices[3].chars().collect::<Vec<char>>();
+      assert_eq!(enp_chars.len(), 2);
+      let x = match enp_chars[0] {
+        'a' => 0,
+        'b' => 1,
+        'c' => 2,
+        'd' => 3,
+        'e' => 4,
+        'f' => 5,
+        'g' => 6,
+        'h' => 7,
+        wrong_char => panic!("Unexpected rank character ({wrong_char}) in en passant data"),
+      };
+
+      let y = match enp_chars[1] {
+        '1' => 0,
+        '2' => 1,
+        '3' => 2,
+        '4' => 3,
+        '5' => 4,
+        '6' => 5,
+        '7' => 6,
+        '8' => 7,
+        wrong_char => panic!("Unexpected file character ({wrong_char}) in en passant data"),
+      };
+
+      let shift = x + y * 8;
+      board.en_passant_mask = 1 << shift;
     }
 
     board.update_masks();
