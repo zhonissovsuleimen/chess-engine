@@ -2,16 +2,15 @@
 use crate::pieces::Pieces;
 use bevy::ecs::system::Resource;
 
-
-#[derive(PartialEq)]
-enum Status {
+#[derive(PartialEq, Default)]
+pub enum Status {
+  #[default]
   Playing,
   WhiteWon,
   BlackWon,
 }
 
-
-#[derive(Resource)]
+#[derive(Default, Resource)]
 pub struct Board {
   pub status: Status,
   pub white_to_move: bool,
@@ -19,6 +18,7 @@ pub struct Board {
   pub black: Pieces,
 
   white_turn_mask: u64,
+
   empty_mask: u64,
   enemy_mask: u64,
   advance_mask: u64,
@@ -29,16 +29,10 @@ pub struct Board {
 impl Board {
   pub fn empty() -> Board {
     let mut board = Board {
-      status: Status::Playing,
-      white_to_move: true,
       white: Pieces::empty(),
       black: Pieces::empty(),
 
-      white_turn_mask: 0,
-      empty_mask: 0,
-      enemy_mask: 0,
-      advance_mask: 0,
-      en_passant_mask: 0,
+      ..Default::default()
     };
 
     board.update_masks();
@@ -47,16 +41,10 @@ impl Board {
 
   pub fn default() -> Board {
     let mut board = Board {
-      status: Status::Playing,
-      white_to_move: true,
       white: Pieces::white(),
       black: Pieces::black(),
 
-      white_turn_mask: 0,
-      empty_mask: 0,
-      enemy_mask: 0,
-      advance_mask: 0,
-      en_passant_mask: 0,
+      ..Default::default()
     };
 
     board.update_masks();

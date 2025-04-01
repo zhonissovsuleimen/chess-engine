@@ -1,4 +1,5 @@
 // rank 8 file a is bit 0, rank 1 file h is bit 63
+#[derive(Default)]
 pub struct Pieces {
   pub pawns: u64,
   pub knights: u64,
@@ -13,15 +14,7 @@ pub struct Pieces {
 //constructors
 impl Pieces {
   pub fn empty() -> Pieces {
-    Pieces {
-      pawns: 0,
-      knights: 0,
-      bishops: 0,
-      rooks: 0,
-      queens: 0,
-      king: 0,
-      pawns_advance: 0,
-    }
+    Pieces::default()
   }
 
   pub fn white() -> Pieces {
