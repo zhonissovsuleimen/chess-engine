@@ -10,7 +10,7 @@ pub enum Status {
   BlackWon,
 }
 
-#[derive(Default, Resource)]
+#[derive(Resource)]
 pub struct Board {
   pub status: Status,
   pub white_turn: bool,
@@ -31,18 +31,6 @@ impl Board {
     let mut board = Board {
       white: Pieces::empty(),
       black: Pieces::empty(),
-
-      ..Default::default()
-    };
-
-    board.update_masks();
-    board
-  }
-
-  pub fn default() -> Board {
-    let mut board = Board {
-      white: Pieces::white(),
-      black: Pieces::black(),
 
       ..Default::default()
     };
@@ -441,5 +429,25 @@ impl Board {
 
   pub fn get_piece_delta(&self) -> i32 {
     self.white.get_value() - self.black.get_value()
+  }
+}
+
+impl Default for Board {
+  fn default() -> Board {
+    let mut board = Board {
+      white_turn: true,
+      white: Pieces::white(),
+      black: Pieces::black(),
+
+      status: Default::default(),
+      white_turn_mask: Default::default(),
+      empty_mask: Default::default(),
+      enemy_mask: Default::default(),
+      advance_mask: Default::default(),
+      en_passant_mask: Default::default(),
+    };
+
+    board.update_masks();
+    board
   }
 }
