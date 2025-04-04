@@ -1,5 +1,5 @@
 //TODO: castiling, pin, checks, checkmates?
-use crate::pieces::Pieces;
+use crate::{board_movement_trait::BoardMovement, pieces::Pieces};
 use bevy::ecs::system::Resource;
 
 #[derive(PartialEq, Default)]
@@ -190,10 +190,10 @@ impl Board {
 
       if to_mask & self.en_passant_mask > 0 {
         if self.white_turn {
-          let pawn_mask = self.en_passant_mask.checked_shl(8).unwrap_or(0);
+          let pawn_mask = self.en_passant_mask.move_down_mask(1);
           self.black.remove_piece(pawn_mask);
         } else {
-          let pawn_mask = self.en_passant_mask.checked_shr(8).unwrap_or(0);
+          let pawn_mask = self.en_passant_mask.move_up_mask(1);
           self.white.remove_piece(pawn_mask);
         }
 
@@ -222,8 +222,8 @@ impl Board {
   fn gen_pawn_moves(&self, at_mask: u64) -> u64 {
     let mut pawn_move;
 
-    pawn_move = self.white_turn_mask & at_mask.checked_shr(8).unwrap_or(0)
-      | !self.white_turn_mask & at_mask.checked_shl(8).unwrap_or(0);
+    pawn_move = self.white_turn_mask & at_mask.move_up_mask(1)
+      | !self.white_turn_mask & at_mask.move_down_mask(1);
 
     pawn_move &= self.empty_mask;
 
@@ -234,15 +234,9 @@ impl Board {
   fn gen_pawn_advence_move(&self, at_mask: u64) -> u64 {
     let pawn_move;
     let (move_one, move_two) = if self.white_turn {
-      (
-        at_mask.checked_shr(8).unwrap_or(0),
-        at_mask.checked_shr(16).unwrap_or(0),
-      )
+      (at_mask.move_up_mask(1), at_mask.move_up_mask(2))
     } else {
-      (
-        at_mask.checked_shl(8).unwrap_or(0),
-        at_mask.checked_shl(16).unwrap_or(0),
-      )
+      (at_mask.move_down_mask(1), at_mask.move_down_mask(2))
     };
 
     let both_moves = move_one | move_two;
@@ -260,14 +254,14 @@ impl Board {
     let x = id % 8;
     let y = id / 8;
 
-    let enemy_to_left_mask = self.white_turn_mask & at_mask.checked_shr(9).unwrap_or(0)
-      | !self.white_turn_mask & at_mask.checked_shl(7).unwrap_or(0);
+    let enemy_to_left_mask = self.white_turn_mask & at_mask.move_up_mask(1).move_left_mask(1)
+      | !self.white_turn_mask & at_mask.move_down_mask(1).move_left_mask(1);
 
     let left_edge_check = (x != 0) as u64;
     let take_left_mask = left_edge_check * (enemy_to_left_mask & self.enemy_mask);
 
-    let enemy_to_right_mask = self.white_turn_mask & at_mask.checked_shr(7).unwrap_or(0)
-      | !self.white_turn_mask & at_mask.checked_shl(9).unwrap_or(0);
+    let enemy_to_right_mask = self.white_turn_mask & at_mask.move_up_mask(1).move_right_mask(1)
+      | !self.white_turn_mask & at_mask.move_down_mask(1).move_right_mask(1);
 
     let right_edge_check = (x != 7) as u64;
     let take_right_mask = right_edge_check * (enemy_to_right_mask & self.enemy_mask);

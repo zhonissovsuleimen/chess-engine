@@ -1,4 +1,5 @@
 mod board;
+mod board_movement_trait;
 mod board_position_lookup;
 mod pieces;
 
@@ -33,7 +34,7 @@ struct MouseData {
 
 #[derive(Resource)]
 struct BoardValue {
-  value: i32
+  value: i32,
 }
 
 fn main() {
@@ -128,12 +129,18 @@ fn detect_piece(
   }
 }
 
-fn update_sprites(mut commands: Commands, asset_server: Res<AssetServer>, board: Res<Board>, mut prev_value: ResMut<BoardValue>, sprites: Query<Entity, With<PieceTag>>) {
+fn update_sprites(
+  mut commands: Commands,
+  asset_server: Res<AssetServer>,
+  board: Res<Board>,
+  mut prev_value: ResMut<BoardValue>,
+  sprites: Query<Entity, With<PieceTag>>,
+) {
   if board.get_piece_delta() == prev_value.value {
     return;
   }
   prev_value.value = board.get_piece_delta();
-  
+
   for sprite in sprites.iter() {
     commands.entity(sprite).despawn();
   }
