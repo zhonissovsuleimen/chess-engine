@@ -154,13 +154,15 @@ impl Board {
     let mut new_moves_mask = 0;
 
     if self.is_pawn(from_mask) {
-      let move_one = self.gen_pawn_moves(from_mask);
-      let move_two = self.gen_pawn_advence_move(from_mask);
+      let default_move = self.gen_pawn_default_move(from_mask);
+      let advance_move = self.gen_pawn_advance_move(from_mask);
+      let capturing_move = self.gen_pawn_capturing_moves(from_mask);
 
-      new_moves_mask |= move_one & to_mask;
-      if move_two & to_mask > 0 {
-        new_moves_mask += move_two;
-        self.en_passant_mask = move_one;
+      new_moves_mask |= (capturing_move | default_move) & to_mask;
+
+      if (advance_move & to_mask) > 0 {
+        new_moves_mask |= advance_move & to_mask;
+        self.en_passant_mask = default_move;
         if self.white_turn {
           self.white.remove_advance(from_mask);
         } else {
@@ -219,62 +221,41 @@ impl Board {
 
 //move generations
 impl Board {
-  fn gen_pawn_moves(&self, at_mask: u64) -> u64 {
-    let mut pawn_move;
-
-    pawn_move = self.white_turn_mask & at_mask.move_up_mask(1)
+  fn gen_pawn_default_move(&self, at_mask: u64) -> u64 {
+    let mut pawn_default_move = self.white_turn_mask & at_mask.move_up_mask(1)
       | !self.white_turn_mask & at_mask.move_down_mask(1);
 
-    pawn_move &= self.empty_mask;
+    pawn_default_move &= self.empty_mask;
 
-    pawn_move |= self.gen_pawn_capturing_moves(at_mask);
-    return pawn_move;
+    pawn_default_move
   }
 
-  fn gen_pawn_advence_move(&self, at_mask: u64) -> u64 {
-    let pawn_move;
-    let (move_one, move_two) = if self.white_turn {
-      (at_mask.move_up_mask(1), at_mask.move_up_mask(2))
-    } else {
-      (at_mask.move_down_mask(1), at_mask.move_down_mask(2))
-    };
+  fn gen_pawn_advance_move(&self, at_mask: u64) -> u64 {
+    let mut pawn_advance_move = self.white_turn_mask & at_mask.move_up_mask(2)
+      | !self.white_turn_mask & at_mask.move_down_mask(2);
 
-    let both_moves = move_one | move_two;
+    let color_adjusted_empty_mask = self.empty_mask
+      & (self.white_turn_mask & self.empty_mask.move_up_mask(1)
+        | !self.white_turn_mask & self.empty_mask.move_down_mask(1));
 
-    let can_advance = (at_mask & self.advance_mask) > 0;
-    pawn_move = (both_moves & self.empty_mask & move_two) * can_advance as u64;
+    let color_adjusted_advance_mask = self.white_turn_mask & self.advance_mask.move_up_mask(2)
+      | !self.white_turn_mask & self.advance_mask.move_down_mask(2);
 
-    pawn_move
+    pawn_advance_move &= color_adjusted_empty_mask & color_adjusted_advance_mask;
+
+    pawn_advance_move
   }
 
   fn gen_pawn_capturing_moves(&self, at_mask: u64) -> u64 {
-    let pawn_move;
+    let mut pawn_move = 0;
 
-    let id = at_mask.trailing_zeros() as i32;
-    let x = id % 8;
-    let y = id / 8;
-
-    let enemy_to_left_mask = self.white_turn_mask & at_mask.move_up_mask(1).move_left_mask(1)
+    let enemy_to_left = self.white_turn_mask & at_mask.move_up_mask(1).move_left_mask(1)
       | !self.white_turn_mask & at_mask.move_down_mask(1).move_left_mask(1);
 
-    let left_edge_check = (x != 0) as u64;
-    let take_left_mask = left_edge_check * (enemy_to_left_mask & self.enemy_mask);
-
-    let enemy_to_right_mask = self.white_turn_mask & at_mask.move_up_mask(1).move_right_mask(1)
+    let enemy_to_right = self.white_turn_mask & at_mask.move_up_mask(1).move_right_mask(1)
       | !self.white_turn_mask & at_mask.move_down_mask(1).move_right_mask(1);
-
-    let right_edge_check = (x != 7) as u64;
-    let take_right_mask = right_edge_check * (enemy_to_right_mask & self.enemy_mask);
-
-    let enp_id = self.en_passant_mask.trailing_zeros() as i32;
-    let enp_x = enp_id % 8;
-    let enp_y = enp_id / 8;
-
-    let can_enp_x = (enp_x - x).abs() == 1;
-    let can_enp_y = y - enp_y == 1 - 2 * !self.white_turn as i32;
-    let can_enp = (can_enp_x && can_enp_y) as u64;
-
-    pawn_move = take_left_mask | take_right_mask | (can_enp * self.en_passant_mask);
+    
+    pawn_move |= (enemy_to_left | enemy_to_right) & (self.enemy_mask | self.en_passant_mask);
 
     pawn_move
   }
