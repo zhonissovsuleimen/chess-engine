@@ -321,19 +321,18 @@ impl Board {
   fn gen_offset_moves(&self, at_mask: u64, offsets: Vec<(i32, i32)>) -> u64 {
     let mut moves = 0;
 
-    let id = at_mask.trailing_zeros() as i32;
-    let x = id % 8;
-    let y = id / 8;
-
     for (dx, dy) in offsets {
-      let new_x = x + dx;
-      let new_y = y + dy;
-      let new_pos = new_x + new_y * 8;
+      let x_positive = (dx > 0) as u64;
+      let x_positive_mask = !(x_positive.overflowing_sub(1).0);
 
-      let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
-      let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
+      let y_positive = (dy > 0) as u64;
+      let y_positive_mask = !(y_positive.overflowing_sub(1).0);
 
-      let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
+      let mut new_move_mask = x_positive_mask & at_mask.move_right_mask(dx.abs() as u32)
+        | !x_positive_mask & at_mask.move_left_mask(dx.abs() as u32);
+
+      new_move_mask = y_positive_mask & new_move_mask.move_up_mask(dy.abs() as u32)
+        | !y_positive_mask & new_move_mask.move_down_mask(dy.abs() as u32);
 
       moves |= new_move_mask & (self.empty_mask | self.enemy_mask);
     }
@@ -359,8 +358,8 @@ impl Board {
         | !y_positive_mask & new_move_mask.move_down_mask(current.1.abs() as u32);
 
       let friend_mask = new_move_mask & !(self.empty_mask | self.enemy_mask);
-
       let capture_mask = new_move_mask & self.enemy_mask;
+
       if new_move_mask == 0 || friend_mask > 0 {
         break;
       } else if capture_mask > 0 {
