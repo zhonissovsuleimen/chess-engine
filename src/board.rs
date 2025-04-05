@@ -254,7 +254,7 @@ impl Board {
 
     let enemy_to_right = self.white_turn_mask & at_mask.move_up_mask(1).move_right_mask(1)
       | !self.white_turn_mask & at_mask.move_down_mask(1).move_right_mask(1);
-    
+
     pawn_move |= (enemy_to_left | enemy_to_right) & (self.enemy_mask | self.en_passant_mask);
 
     pawn_move
@@ -344,35 +344,36 @@ impl Board {
   fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
     let mut moves = 0;
 
-    let id = at_mask.trailing_zeros() as i32;
-    let x = id % 8;
-    let y = id / 8;
+    let x_positive = (dx > 0) as u64;
+    let x_positive_mask = !(x_positive.overflowing_sub(1).0);
+
+    let y_positive = (dy > 0) as u64;
+    let y_positive_mask = !(y_positive.overflowing_sub(1).0);
 
     let mut current = (dx, dy);
     loop {
-      let new_x = x + current.0;
-      let new_y = y + current.1;
-      let new_pos = new_x + new_y * 8;
+      let mut new_move_mask = x_positive_mask & at_mask.move_right_mask(current.0.abs() as u32)
+        | !x_positive_mask & at_mask.move_left_mask(current.0.abs() as u32);
 
-      let within_board = new_x >= 0 && new_x < 8 && new_y >= 0 && new_y < 8;
+      new_move_mask = y_positive_mask & new_move_mask.move_up_mask(current.1.abs() as u32)
+        | !y_positive_mask & new_move_mask.move_down_mask(current.1.abs() as u32);
 
-      let shift = (within_board as i32) * new_pos + (!within_board as i32) * 64; // new_pos if within board, 64 otherwise (will lead to 0 mask);
-      let new_move_mask = 1u64.checked_shl(shift as u32).unwrap_or(0);
+      let friend_mask = new_move_mask & !(self.empty_mask | self.enemy_mask);
 
-      let capture = new_move_mask & self.enemy_mask > 0;
-      let friendly_piece = new_move_mask & !(self.enemy_mask | self.empty_mask) > 0;
-
-      if !within_board || friendly_piece {
-        return moves;
-      } else if capture {
-        moves |= new_move_mask & self.enemy_mask;
-        return moves;
-      } else {
-        moves |= new_move_mask & self.empty_mask;
+      let capture_mask = new_move_mask & self.enemy_mask;
+      if new_move_mask == 0 || friend_mask > 0 {
+        break;
+      } else if capture_mask > 0 {
+        moves |= capture_mask;
+        break;
       }
+
+      moves |= new_move_mask;
 
       current = (current.0 + dx, current.1 + dy);
     }
+
+    moves
   }
 }
 
