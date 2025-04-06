@@ -405,6 +405,27 @@ impl Board {
   pub fn get_piece_delta(&self) -> i32 {
     self.white.get_value() - self.black.get_value()
   }
+
+  pub fn get_piece_moves(&self, at_mask: u64) -> u64 {
+    let mut moves = 0;
+    if at_mask & (self.white.pawns | self.black.pawns) > 0 {
+      moves = self.gen_pawn_default_move(at_mask)
+        | self.gen_pawn_advance_move(at_mask)
+        | self.gen_pawn_capturing_moves(at_mask);
+    } else if at_mask & (self.white.knights | self.black.knights) > 0 {
+      moves = self.gen_knight_moves(at_mask);
+    } else if at_mask & (self.white.bishops | self.black.bishops) > 0 {
+      moves = self.gen_bishop_moves(at_mask);
+    } else if at_mask & (self.white.rooks | self.black.rooks) > 0 {
+      moves = self.gen_rook_moves(at_mask);
+    } else if at_mask & (self.white.queens | self.black.queens) > 0 {
+      moves = self.gen_queen_moves(at_mask);
+    } else if at_mask & (self.white.king | self.black.king) > 0 {
+      moves = self.gen_king_moves(at_mask);
+    }
+
+    moves
+  }
 }
 
 impl Default for Board {

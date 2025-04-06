@@ -8,6 +8,9 @@ use board::Board;
 use board_position_lookup::{CENTER_LOOKUP, X_LOOKUP, Y_LOOKUP};
 
 #[derive(Component)]
+struct MoveCircleTag;
+
+#[derive(Component)]
 struct PieceTag(bool);
 
 struct SelectedPieceData {
@@ -52,6 +55,7 @@ fn main() {
     .add_systems(PreStartup, startup)
     .add_systems(PreUpdate, (update_sprites, update_mouse_data))
     .add_systems(Update, detect_piece)
+    .add_systems(PostUpdate, update_moves_sprite)
     .run();
 }
 
@@ -150,7 +154,7 @@ fn update_sprites(
 
     let transform = Transform {
       translation: CENTER_LOOKUP[i],
-      scale: Vec3::splat(0.75),
+      scale: Vec3::new(0.75, 0.75, 1.0),
       rotation: Quat::IDENTITY,
     };
 
@@ -226,6 +230,40 @@ fn update_sprites(
         transform,
         PieceTag(false),
       ));
+    }
+  }
+}
+
+fn update_moves_sprite(
+  mut commands: Commands,
+  asset_server: Res<AssetServer>,
+  board: Res<Board>,
+  sprites: Query<Entity, With<MoveCircleTag>>,
+  selected_piece: ResMut<SelectedPiece>,
+) {
+  if let Some(piece) = &selected_piece.data {
+    let piece_mask = 1 << piece.original_board_pos;
+    let moves_mask = board.get_piece_moves(piece_mask);
+
+    for i in 0..64 {
+      if (moves_mask >> i) & 1 == 0 {
+        continue;
+      }
+
+      let transform = Transform {
+        translation: CENTER_LOOKUP[i] + Vec3::new(0.0, 0.0, 0.1),
+        scale: Vec3::new(0.2, 0.2, 1.0),
+        rotation: Quat::IDENTITY,
+      };
+
+      let mut sprite = Sprite::from_image(asset_server.load("circle.png"));
+      sprite.color.set_alpha(0.05);
+
+      commands.spawn((sprite, transform, MoveCircleTag));
+    }
+  } else {
+    for sprite in &sprites {
+      commands.entity(sprite).despawn();
     }
   }
 }
