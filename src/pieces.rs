@@ -1,3 +1,5 @@
+use crate::util_fns::branchless_if;
+
 // rank 8 file a is bit 0, rank 1 file h is bit 63
 #[derive(Default)]
 pub struct Pieces {
@@ -67,7 +69,7 @@ impl Pieces {
   }
 
   pub fn pieces_concat(&self) -> u64 {
-    return self.pawns + self.knights + self.bishops + self.rooks + self.queens + self.king;
+    return self.pawns | self.knights | self.bishops | self.rooks | self.queens | self.king;
   }
 
   pub fn get_value(&self) -> i32 {
@@ -85,26 +87,13 @@ impl Pieces {
 //moves & state
 impl Pieces {
   pub fn move_piece(&mut self, from_mask: u64, to_mask: u64) {
-    //todo: branchless bitwise trickery
-    if self.is_pawn(from_mask) {
-      self.pawns -= from_mask;
-      self.pawns += to_mask;
-    } else if self.is_knight(from_mask) {
-      self.knights -= from_mask;
-      self.knights += to_mask;
-    } else if self.is_bishop(from_mask) {
-      self.bishops -= from_mask;
-      self.bishops += to_mask;
-    } else if self.is_rook(from_mask) {
-      self.rooks -= from_mask;
-      self.rooks += to_mask;
-    } else if self.is_queen(from_mask) {
-      self.queens -= from_mask;
-      self.queens += to_mask;
-    } else if self.is_king(from_mask) {
-      self.king -= from_mask;
-      self.king += to_mask;
-    }
+    let valid = from_mask > 0 && to_mask > 0;
+    self.pawns = branchless_if(valid && self.pawns & from_mask > 0, (self.pawns & !from_mask) | to_mask, self.pawns);
+    self.knights = branchless_if(valid && self.knights & from_mask > 0, (self.knights & !from_mask) | to_mask, self.knights);
+    self.bishops = branchless_if(valid && self.bishops & from_mask > 0, (self.bishops & !from_mask) | to_mask, self.bishops);
+    self.rooks = branchless_if(valid && self.rooks & from_mask > 0, (self.rooks & !from_mask) | to_mask, self.rooks);
+    self.queens = branchless_if(valid && self.queens & from_mask > 0, (self.queens & !from_mask) | to_mask, self.queens);
+    self.king = branchless_if(valid && self.king & from_mask > 0, (self.king & !from_mask) | to_mask, self.king);
   }
 
   pub fn remove_piece(&mut self, at_mask: u64) {
@@ -143,5 +132,4 @@ impl Pieces {
   pub fn is_king(&self, at_mask: u64) -> bool {
     return self.king & at_mask > 0;
   }
-
 }
