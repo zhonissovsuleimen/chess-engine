@@ -2,6 +2,7 @@ mod board;
 mod board_movement_trait;
 mod board_position_lookup;
 mod pieces;
+mod util_fns;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 use board::Board;
