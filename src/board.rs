@@ -416,7 +416,3 @@ impl Default for Board {
     board
   }
 }
-
-fn bool_to_mask(condition: bool) -> u64 {
-  !((condition as u64).overflowing_sub(1).0)
-}
