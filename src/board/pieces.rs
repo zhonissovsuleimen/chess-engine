@@ -1,4 +1,4 @@
-use crate::util_fns::branchless_if;
+use super::util_fns::branchless_if;
 
 // rank 8 file a is bit 0, rank 1 file h is bit 63
 #[derive(Default)]

@@ -1,5 +1,5 @@
 //TODO: castiling, checks, checkmates?
-use crate::{
+use super::{
   board_movement_trait::BoardMovement,
   pieces::Pieces,
   util_fns::{branchless_if, mask_from_bool},
@@ -24,7 +24,7 @@ pub struct Board {
   empty_mask: u64,
   advance_mask: u64,
   en_passant_mask: u64,
-  enemy_capturing_moves: u64,
+  under_attack_mask: u64,
 }
 
 //constructor
@@ -224,7 +224,7 @@ impl Board {
       | self.gen_queen_moves(self.black.queens)
       | self.gen_king_moves(self.black.king);
 
-    self.enemy_capturing_moves = branchless_if(
+    self.under_attack_mask = branchless_if(
       self.white_turn,
       black_capturing_moves,
       white_capturing_moves,
@@ -471,20 +471,20 @@ impl Board {
     branchless_if(pinned, pin_path, 0)
   }
 
-  fn gen_pin_mask(&self, at_mask: u64) -> u64 {
+  fn gen_pin_filter(&self, at_mask: u64) -> u64 {
     let ally_king = branchless_if(self.white_turn, self.white.king, self.black.king);
-    let mut pin_path = 0;
+    let mut pin_filter = 0;
 
-    pin_path |= self.gen_pin_path(ally_king, -1, -1);
-    pin_path |= self.gen_pin_path(ally_king, 1, -1);
-    pin_path |= self.gen_pin_path(ally_king, -1, 1);
-    pin_path |= self.gen_pin_path(ally_king, 1, 1);
-    pin_path |= self.gen_pin_path(ally_king, -1, 0);
-    pin_path |= self.gen_pin_path(ally_king, 0, -1);
-    pin_path |= self.gen_pin_path(ally_king, 1, 0);
-    pin_path |= self.gen_pin_path(ally_king, 0, 1);
+    pin_filter |= self.gen_pin_path(ally_king, -1, -1);
+    pin_filter |= self.gen_pin_path(ally_king, 1, -1);
+    pin_filter |= self.gen_pin_path(ally_king, -1, 1);
+    pin_filter |= self.gen_pin_path(ally_king, 1, 1);
+    pin_filter |= self.gen_pin_path(ally_king, -1, 0);
+    pin_filter |= self.gen_pin_path(ally_king, 0, -1);
+    pin_filter |= self.gen_pin_path(ally_king, 1, 0);
+    pin_filter |= self.gen_pin_path(ally_king, 0, 1);
 
-    branchless_if(pin_path & at_mask > 0, pin_path, u64::MAX)
+    branchless_if(pin_filter & at_mask > 0, pin_filter, u64::MAX)
   }
 }
 
@@ -529,12 +529,12 @@ impl Board {
     let rook_moves = self.gen_rook_moves(at_mask & self.rooks());
     let queen_moves = self.gen_queen_moves(at_mask & self.queens());
     let king_moves =
-      self.gen_king_moves(at_mask & self.kings()) & !self.enemy_capturing_moves;
+      self.gen_king_moves(at_mask & self.kings()) & !self.under_attack_mask;
 
     let pseudo =
       pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
 
-    let pin_filter = self.gen_pin_mask(at_mask);
+    let pin_filter = self.gen_pin_filter(at_mask);
 
     pin_filter & pseudo
   }
@@ -551,7 +551,7 @@ impl Default for Board {
       empty_mask: Default::default(),
       advance_mask: Default::default(),
       en_passant_mask: Default::default(),
-      enemy_capturing_moves: Default::default(),
+      under_attack_mask: Default::default(),
     };
 
     board.update_masks();
