@@ -1,4 +1,4 @@
-//TODO: castiling, pin, checks, checkmates?
+//TODO: castiling, checks, checkmates?
 use crate::{board_movement_trait::BoardMovement, pieces::Pieces, util_fns::{branchless_if, mask_from_bool}};
 use bevy::ecs::system::Resource;
 
@@ -192,17 +192,17 @@ impl Board {
     let white_capturing_moves =
       self.gen_pawn_capturing_moves(self.white.pawns, true, true)
         | self.gen_knight_moves(self.white.knights, true)
-        | self.gen_bishop_moves(self.white.bishops, true, false)
-        | self.gen_rook_moves(self.white.rooks, true, false)
-        | self.gen_queen_moves(self.white.queens, true, false)
+        | self.gen_bishop_moves(self.white.bishops, true)
+        | self.gen_rook_moves(self.white.rooks, true)
+        | self.gen_queen_moves(self.white.queens, true)
         | self.gen_king_moves(self.white.king, true);
 
     let black_capturing_moves =
       self.gen_pawn_capturing_moves(self.black.pawns, false, true)
         | self.gen_knight_moves(self.black.knights, false)
-        | self.gen_bishop_moves(self.black.bishops, false, false)
-        | self.gen_rook_moves(self.black.rooks, false, false)
-        | self.gen_queen_moves(self.black.queens, false, false)
+        | self.gen_bishop_moves(self.black.bishops, false)
+        | self.gen_rook_moves(self.black.rooks, false)
+        | self.gen_queen_moves(self.black.queens, false)
         | self.gen_king_moves(self.black.king, false);
 
     self.enemy_capturing_moves = branchless_if(self.white_turn, black_capturing_moves, white_capturing_moves);
@@ -262,30 +262,30 @@ impl Board {
     self.gen_offset_moves(at_mask, offsets, white_turn)
   }
 
-  fn gen_bishop_moves(&self, at_mask: u64, white_turn: bool, ignore_first_enemy: bool) -> u64 {
+  fn gen_bishop_moves(&self, at_mask: u64, white_turn: bool) -> u64 {
     let mut moves = 0;
 
-    moves |= self.gen_iterative_moves(at_mask, -1, -1, white_turn, ignore_first_enemy);
-    moves |= self.gen_iterative_moves(at_mask, 1, -1, white_turn, ignore_first_enemy);
-    moves |= self.gen_iterative_moves(at_mask, -1, 1, white_turn, ignore_first_enemy);
-    moves |= self.gen_iterative_moves(at_mask, 1, 1, white_turn, ignore_first_enemy);
+    moves |= self.gen_iterative_moves(at_mask, -1, -1, white_turn);
+    moves |= self.gen_iterative_moves(at_mask, 1, -1, white_turn);
+    moves |= self.gen_iterative_moves(at_mask, -1, 1, white_turn);
+    moves |= self.gen_iterative_moves(at_mask, 1, 1, white_turn);
 
     moves
   }
 
-  fn gen_rook_moves(&self, at_mask: u64, white_turn: bool, ignore_first_enemy: bool) -> u64 {
+  fn gen_rook_moves(&self, at_mask: u64, white_turn: bool) -> u64 {
     let mut moves = 0;
 
-    moves |= self.gen_iterative_moves(at_mask, -1, 0, white_turn, ignore_first_enemy);
-    moves |= self.gen_iterative_moves(at_mask, 0, -1, white_turn, ignore_first_enemy);
-    moves |= self.gen_iterative_moves(at_mask, 1, 0, white_turn, ignore_first_enemy);
-    moves |= self.gen_iterative_moves(at_mask, 0, 1, white_turn, ignore_first_enemy);
+    moves |= self.gen_iterative_moves(at_mask, -1, 0, white_turn);
+    moves |= self.gen_iterative_moves(at_mask, 0, -1, white_turn);
+    moves |= self.gen_iterative_moves(at_mask, 1, 0, white_turn);
+    moves |= self.gen_iterative_moves(at_mask, 0, 1, white_turn);
 
     moves
   }
 
-  fn gen_queen_moves(&self, at_mask: u64, white_turn: bool, ignore_first_enemy: bool) -> u64 {
-    self.gen_bishop_moves(at_mask, white_turn, ignore_first_enemy) | self.gen_rook_moves(at_mask, white_turn, ignore_first_enemy)
+  fn gen_queen_moves(&self, at_mask: u64, white_turn: bool) -> u64 {
+    self.gen_bishop_moves(at_mask, white_turn) | self.gen_rook_moves(at_mask, white_turn)
   }
 
   fn gen_king_moves(&self, at_mask: u64, white_turn: bool) -> u64 {
@@ -325,12 +325,11 @@ impl Board {
     moves
   }
 
-  fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32, white_turn: bool, ignore_first_enemy: bool) -> u64 {
+  fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32, white_turn: bool) -> u64 {
     let enemy_mask = branchless_if(white_turn, self.black.pieces_concat(), self.white.pieces_concat());
 
     let mut moves = 0;
     let mut current = (dx, dy);
-    let mut enemy_count = 0;
     loop {
       let mut new_move = branchless_if(dx > 0, at_mask.move_right_mask(current.0.abs() as u32), at_mask.move_left_mask(current.0.abs() as u32));
       new_move = branchless_if(dy > 0, new_move.move_up_mask(current.1.abs() as u32), new_move.move_down_mask(current.1.abs() as u32));
@@ -341,17 +340,72 @@ impl Board {
       let is_enemy = new_move & enemy_mask > 0;
       let is_empty = new_move & self.empty_mask > 0;
       let is_ally = !(is_empty || is_enemy);
-      enemy_count += is_enemy as u64;
-      let ignore = ignore_first_enemy && enemy_count == 1;
 
       moves |= branchless_if(is_enemy || is_empty, new_move, 0);
       
-      if !within_board || is_ally || (!ignore && is_enemy) {
+      if !within_board || is_ally || is_enemy {
         break;
       } 
     }
 
     moves
+  }
+
+  fn gen_pin_path(&self, at_mask: u64, dx: i32, dy: i32, white_turn: bool) -> u64 {
+    let enemy_mask = branchless_if(white_turn, self.black.pieces_concat(), self.white.pieces_concat());
+    let white_attackers = self.white.bishops | self.white.rooks | self.white.queens;
+    let black_attackers = self.black.bishops | self.black.rooks | self.black.queens;
+    let correct_pieces = branchless_if(white_turn, black_attackers, white_attackers);
+
+    let mut pin_path = 0;
+    let mut current = (dx, dy);
+
+    let mut ally_count = 0;
+    let mut enemy_count = 0;
+    let mut pinned;
+
+    loop {
+      let mut new_move = branchless_if(dx > 0, at_mask.move_right_mask(current.0.abs() as u32), at_mask.move_left_mask(current.0.abs() as u32));
+      new_move = branchless_if(dy > 0, new_move.move_up_mask(current.1.abs() as u32), new_move.move_down_mask(current.1.abs() as u32));
+
+      current = (current.0 + dx, current.1 + dy);
+
+      let within_board = new_move > 0;
+      let is_enemy = new_move & enemy_mask > 0;
+      let is_empty = new_move & self.empty_mask > 0;
+      let is_ally = !(is_empty || is_enemy);
+
+      enemy_count += is_enemy as u64;
+      ally_count += is_ally as u64;
+
+      pinned = ally_count == 1 && enemy_count == 1 && (correct_pieces & new_move > 0);
+      let done = (ally_count == 0 && enemy_count == 1) || (ally_count == 2 && enemy_count == 0) || pinned;
+
+      pin_path |= new_move;
+      
+      if !within_board || done {
+        break;
+      } 
+    }
+
+    branchless_if(pinned, pin_path, 0)
+  }
+
+
+  fn gen_pin_mask(&self, at_mask: u64, white_turn: bool) -> u64 {
+    let ally_king = branchless_if(self.white_turn, self.white.king, self.black.king);
+    let mut pin_path = 0;
+
+    pin_path |= self.gen_pin_path(ally_king, -1, -1, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, 1, -1, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, -1, 1, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, 1, 1, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, -1, 0, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, 0, -1, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, 1, 0, white_turn);
+    pin_path |= self.gen_pin_path(ally_king, 0, 1, white_turn);
+
+    branchless_if(pin_path & at_mask > 0, pin_path, u64::MAX)
   }
 }
 
@@ -391,12 +445,16 @@ impl Board {
     let pawn_capturing_move = self.gen_pawn_capturing_moves(at_mask & self.pawns(), self.white_turn, false);
     let pawn_moves = pawn_default_move | pawn_advance_move | pawn_capturing_move;
     let knight_moves = self.gen_knight_moves(at_mask & self.knights(), self.white_turn);
-    let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), self.white_turn, false);
-    let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), self.white_turn, false);
-    let queen_moves = self.gen_queen_moves(at_mask & self.queens(), self.white_turn, false);
+    let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), self.white_turn);
+    let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), self.white_turn);
+    let queen_moves = self.gen_queen_moves(at_mask & self.queens(), self.white_turn);
     let king_moves = self.gen_king_moves(at_mask & self.kings(), self.white_turn) & !self.enemy_capturing_moves;
 
-    pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves
+    let pseudo = pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
+
+    let pin_filter = self.gen_pin_mask(at_mask, self.white_turn);
+
+    pin_filter & pseudo
   }
 }
 
