@@ -21,8 +21,6 @@ pub struct Board {
   pub white: Pieces,
   pub black: Pieces,
 
-  white_turn_mask: u64,
-
   empty_mask: u64,
   advance_mask: u64,
   en_passant_mask: u64,
@@ -181,6 +179,7 @@ impl Board {
 
     //handling pawn advance logic
     let pawn_advanced = move_mask & pawn_advance_move > 0;
+    self.advance_mask &= !(branchless_if(pawn_advanced, from_mask, 0));
     self.en_passant_mask = branchless_if(
       pawn_advanced,
       branchless_if(
@@ -205,7 +204,6 @@ impl Board {
   }
 
   fn update_masks(&mut self) {
-    self.white_turn_mask = mask_from_bool(self.white_turn);
     self.empty_mask = !(self.white.pieces_concat() | self.black.pieces_concat());
     self.advance_mask = self.white.pawns_advance | self.black.pawns_advance;
 
@@ -550,7 +548,6 @@ impl Default for Board {
       black: Pieces::black(),
 
       status: Default::default(),
-      white_turn_mask: Default::default(),
       empty_mask: Default::default(),
       advance_mask: Default::default(),
       en_passant_mask: Default::default(),
