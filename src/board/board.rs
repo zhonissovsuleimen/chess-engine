@@ -1,8 +1,10 @@
+use crate::board::move_generation::Modifier;
+
 //TODO: castiling, checks, checkmates?
 use super::{
   board_movement_trait::BoardMovement,
   pieces::Pieces,
-  util_fns::{branchless_if, mask_from_bool},
+  util_fns::branchless_if,
 };
 use bevy::ecs::system::Resource;
 
@@ -21,10 +23,10 @@ pub struct Board {
   pub white: Pieces,
   pub black: Pieces,
 
-  empty_mask: u64,
-  advance_mask: u64,
-  en_passant_mask: u64,
-  under_attack_mask: u64,
+  pub(super) empty_mask: u64,
+  pub(super) advance_mask: u64,
+  pub(super) en_passant_mask: u64,
+  pub(super) under_attack_mask: u64,
 }
 
 //constructor
@@ -160,7 +162,7 @@ impl Board {
     }
 
     //calculating moves
-    let pawn_advance_move = self.gen_pawn_advance_move(from_mask & self.pawns());
+    let pawn_advance_move = self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
     let move_mask = to_mask & self.get_piece_moves(from_mask);
 
     //handling en passant logic
@@ -207,284 +209,13 @@ impl Board {
     self.empty_mask = !(self.white.pieces_concat() | self.black.pieces_concat());
     self.advance_mask = self.white.pawns_advance | self.black.pawns_advance;
 
-    let turn = self.white_turn;
-    self.white_turn = true;
-    let white_capturing_moves = self.gen_pawn_capturing_moves(self.white.pawns, true)
-      | self.gen_knight_moves(self.white.knights)
-      | self.gen_bishop_moves(self.white.bishops)
-      | self.gen_rook_moves(self.white.rooks)
-      | self.gen_queen_moves(self.white.queens)
-      | self.gen_king_moves(self.white.king);
+    self.under_attack_mask = self.gen_pawn_capturing_moves(self.white.pawns, Modifier::FLIP_SIDE)
+      | self.gen_knight_moves(self.white.knights, Modifier::FLIP_SIDE)
+      | self.gen_bishop_moves(self.white.bishops, Modifier::FLIP_SIDE)
+      | self.gen_rook_moves(self.white.rooks, Modifier::FLIP_SIDE)
+      | self.gen_queen_moves(self.white.queens, Modifier::FLIP_SIDE)
+      | self.gen_king_moves(self.white.king, Modifier::FLIP_SIDE);
 
-    self.white_turn = false;
-    let black_capturing_moves = self.gen_pawn_capturing_moves(self.black.pawns, true)
-      | self.gen_knight_moves(self.black.knights)
-      | self.gen_bishop_moves(self.black.bishops)
-      | self.gen_rook_moves(self.black.rooks)
-      | self.gen_queen_moves(self.black.queens)
-      | self.gen_king_moves(self.black.king);
-
-    self.under_attack_mask = branchless_if(
-      self.white_turn,
-      black_capturing_moves,
-      white_capturing_moves,
-    );
-    self.white_turn = turn;
-  }
-}
-
-//move generations
-impl Board {
-  fn gen_pawn_default_move(&self, at_mask: u64) -> u64 {
-    let pawn_default_move = branchless_if(
-      self.white_turn,
-      at_mask.move_up_mask(1),
-      at_mask.move_down_mask(1),
-    );
-
-    pawn_default_move & self.empty_mask
-  }
-
-  fn gen_pawn_advance_move(&self, at_mask: u64) -> u64 {
-    let default = self.gen_pawn_default_move(at_mask);
-    let can_default_mask = branchless_if(
-      self.white_turn,
-      default.move_up_mask(1),
-      default.move_down_mask(1),
-    );
-
-    let can_advance_mask = branchless_if(
-      self.white_turn,
-      self.advance_mask.move_up_mask(2),
-      self.advance_mask.move_down_mask(2),
-    );
-
-    let pawn_advance_move = branchless_if(
-      self.white_turn,
-      at_mask.move_up_mask(2),
-      at_mask.move_down_mask(2),
-    );
-
-    pawn_advance_move & self.empty_mask & can_advance_mask & can_default_mask
-  }
-
-  fn gen_pawn_capturing_moves(&self, at_mask: u64, ignore_enemy_check: bool) -> u64 {
-    let enemy_mask = branchless_if(
-      self.white_turn,
-      self.black.pieces_concat(),
-      self.white.pieces_concat(),
-    );
-    let ignore_mask = mask_from_bool(ignore_enemy_check);
-
-    let one_move_up = at_mask.move_up_mask(1);
-    let one_move_down = at_mask.move_down_mask(1);
-
-    let enemy_to_left = branchless_if(
-      self.white_turn,
-      one_move_up.move_left_mask(1),
-      one_move_down.move_left_mask(1),
-    );
-    let enemy_to_right = branchless_if(
-      self.white_turn,
-      one_move_up.move_right_mask(1),
-      one_move_down.move_right_mask(1),
-    );
-
-    (enemy_to_left | enemy_to_right) & (ignore_mask | enemy_mask | self.en_passant_mask)
-  }
-
-  fn gen_knight_moves(&self, at_mask: u64) -> u64 {
-    let offsets = [
-      (-1, -2),
-      (1, -2),
-      (-2, -1),
-      (2, -1),
-      (-2, 1),
-      (2, 1),
-      (-1, 2),
-      (1, 2),
-    ]
-    .to_vec();
-
-    self.gen_offset_moves(at_mask, offsets)
-  }
-
-  fn gen_bishop_moves(&self, at_mask: u64) -> u64 {
-    let mut moves = 0;
-
-    moves |= self.gen_iterative_moves(at_mask, -1, -1);
-    moves |= self.gen_iterative_moves(at_mask, 1, -1);
-    moves |= self.gen_iterative_moves(at_mask, -1, 1);
-    moves |= self.gen_iterative_moves(at_mask, 1, 1);
-
-    moves
-  }
-
-  fn gen_rook_moves(&self, at_mask: u64) -> u64 {
-    let mut moves = 0;
-
-    moves |= self.gen_iterative_moves(at_mask, -1, 0);
-    moves |= self.gen_iterative_moves(at_mask, 0, -1);
-    moves |= self.gen_iterative_moves(at_mask, 1, 0);
-    moves |= self.gen_iterative_moves(at_mask, 0, 1);
-
-    moves
-  }
-
-  fn gen_queen_moves(&self, at_mask: u64) -> u64 {
-    self.gen_bishop_moves(at_mask) | self.gen_rook_moves(at_mask)
-  }
-
-  fn gen_king_moves(&self, at_mask: u64) -> u64 {
-    let offsets = [
-      (-1, -1),
-      (0, -1),
-      (1, -1),
-      (-1, 0),
-      (1, 0),
-      (-1, 1),
-      (0, 1),
-      (1, 1),
-    ]
-    .to_vec();
-
-    self.gen_offset_moves(at_mask, offsets)
-  }
-
-  fn gen_offset_moves(&self, at_mask: u64, offsets: Vec<(i32, i32)>) -> u64 {
-    let enemy_mask = branchless_if(
-      self.white_turn,
-      self.black.pieces_concat(),
-      self.white.pieces_concat(),
-    );
-
-    let mut moves = 0;
-
-    for (dx, dy) in offsets {
-      let mut new_move = branchless_if(
-        dx > 0,
-        at_mask.move_right_mask(dx.abs() as u32),
-        at_mask.move_left_mask(dx.abs() as u32),
-      );
-
-      new_move = branchless_if(
-        dy > 0,
-        new_move.move_up_mask(dy.abs() as u32),
-        new_move.move_down_mask(dy.abs() as u32),
-      );
-
-      moves |= new_move & (self.empty_mask | enemy_mask);
-    }
-
-    moves
-  }
-
-  fn gen_iterative_moves(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
-    let enemy_mask = branchless_if(
-      self.white_turn,
-      self.black.pieces_concat(),
-      self.white.pieces_concat(),
-    );
-
-    let mut moves = 0;
-    let mut current = (dx, dy);
-    loop {
-      let mut new_move = branchless_if(
-        dx > 0,
-        at_mask.move_right_mask(current.0.abs() as u32),
-        at_mask.move_left_mask(current.0.abs() as u32),
-      );
-      new_move = branchless_if(
-        dy > 0,
-        new_move.move_up_mask(current.1.abs() as u32),
-        new_move.move_down_mask(current.1.abs() as u32),
-      );
-
-      current = (current.0 + dx, current.1 + dy);
-
-      let within_board = new_move > 0;
-      let is_enemy = new_move & enemy_mask > 0;
-      let is_empty = new_move & self.empty_mask > 0;
-      let is_ally = !(is_empty || is_enemy);
-
-      moves |= branchless_if(is_enemy || is_empty, new_move, 0);
-
-      if !within_board || is_ally || is_enemy {
-        break;
-      }
-    }
-
-    moves
-  }
-
-  fn gen_pin_path(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
-    let enemy_mask = branchless_if(
-      self.white_turn,
-      self.black.pieces_concat(),
-      self.white.pieces_concat(),
-    );
-    let white_attackers = self.white.bishops | self.white.rooks | self.white.queens;
-    let black_attackers = self.black.bishops | self.black.rooks | self.black.queens;
-    let correct_pieces = branchless_if(self.white_turn, black_attackers, white_attackers);
-
-    let mut pin_path = 0;
-    let mut current = (dx, dy);
-
-    let mut ally_count = 0;
-    let mut enemy_count = 0;
-    let mut pinned;
-
-    loop {
-      let mut new_move = branchless_if(
-        dx > 0,
-        at_mask.move_right_mask(current.0.abs() as u32),
-        at_mask.move_left_mask(current.0.abs() as u32),
-      );
-      new_move = branchless_if(
-        dy > 0,
-        new_move.move_up_mask(current.1.abs() as u32),
-        new_move.move_down_mask(current.1.abs() as u32),
-      );
-
-      current = (current.0 + dx, current.1 + dy);
-
-      let within_board = new_move > 0;
-      let is_enemy = new_move & enemy_mask > 0;
-      let is_empty = new_move & self.empty_mask > 0;
-      let is_ally = !(is_empty || is_enemy);
-
-      enemy_count += is_enemy as u64;
-      ally_count += is_ally as u64;
-
-      pinned = ally_count == 1 && enemy_count == 1 && (correct_pieces & new_move > 0);
-      let done = (ally_count == 0 && enemy_count == 1)
-        || (ally_count == 2 && enemy_count == 0)
-        || pinned;
-
-      pin_path |= new_move;
-
-      if !within_board || done {
-        break;
-      }
-    }
-
-    branchless_if(pinned, pin_path, 0)
-  }
-
-  fn gen_pin_filter(&self, at_mask: u64) -> u64 {
-    let ally_king = branchless_if(self.white_turn, self.white.king, self.black.king);
-    let mut pin_filter = 0;
-
-    pin_filter |= self.gen_pin_path(ally_king, -1, -1);
-    pin_filter |= self.gen_pin_path(ally_king, 1, -1);
-    pin_filter |= self.gen_pin_path(ally_king, -1, 1);
-    pin_filter |= self.gen_pin_path(ally_king, 1, 1);
-    pin_filter |= self.gen_pin_path(ally_king, -1, 0);
-    pin_filter |= self.gen_pin_path(ally_king, 0, -1);
-    pin_filter |= self.gen_pin_path(ally_king, 1, 0);
-    pin_filter |= self.gen_pin_path(ally_king, 0, 1);
-
-    branchless_if(pin_filter & at_mask > 0, pin_filter, u64::MAX)
   }
 }
 
@@ -519,24 +250,25 @@ impl Board {
   }
 
   pub fn get_piece_moves(&self, at_mask: u64) -> u64 {
-    let pawn_default_move = self.gen_pawn_default_move(at_mask & self.pawns());
-    let pawn_advance_move = self.gen_pawn_advance_move(at_mask & self.pawns());
+    let pawn_default_move = self.gen_pawn_default_move(at_mask & self.pawns(), Modifier::NONE);
+    let pawn_advance_move = self.gen_pawn_advance_move(at_mask & self.pawns(), Modifier::NONE);
     let pawn_capturing_move =
-      self.gen_pawn_capturing_moves(at_mask & self.pawns(), false);
+      self.gen_pawn_capturing_moves(at_mask & self.pawns(), Modifier::NONE);
     let pawn_moves = pawn_default_move | pawn_advance_move | pawn_capturing_move;
-    let knight_moves = self.gen_knight_moves(at_mask & self.knights());
-    let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops());
-    let rook_moves = self.gen_rook_moves(at_mask & self.rooks());
-    let queen_moves = self.gen_queen_moves(at_mask & self.queens());
+    let knight_moves = self.gen_knight_moves(at_mask & self.knights(), Modifier::NONE);
+    let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), Modifier::NONE);
+    let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), Modifier::NONE);
+    let queen_moves = self.gen_queen_moves(at_mask & self.queens(), Modifier::NONE);
     let king_moves =
-      self.gen_king_moves(at_mask & self.kings()) & !self.under_attack_mask;
+      self.gen_king_moves(at_mask & self.kings(), Modifier::NONE) & !self.under_attack_mask;
 
     let pseudo =
       pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
 
     let pin_filter = self.gen_pin_filter(at_mask);
+    let check_filter = self.gen_check_filter(at_mask);
 
-    pin_filter & pseudo
+    pseudo & pin_filter & check_filter
   }
 }
 
