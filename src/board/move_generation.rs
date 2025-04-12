@@ -315,14 +315,18 @@ impl Board {
     filter |= self.gen_knight_moves(ally_king, Modifier::NONE) & enemy_knights;
     filter |= branchless_if(at_mask == ally_king, u64::MAX, 0);
 
-    let bishop_attacks =
-      self.gen_bishop_moves(enemy_bishops | enemy_queens, Modifier::FLIP_SIDE) | enemy_bishops | enemy_queens;
+    let bishop_attacks = self
+      .gen_bishop_moves(enemy_bishops | enemy_queens, Modifier::FLIP_SIDE)
+      | enemy_bishops
+      | enemy_queens;
     let king_as_bishop = self.gen_bishop_moves(ally_king, Modifier::NONE) | ally_king;
     let combined = bishop_attacks & king_as_bishop;
     filter |= branchless_if(combined & ally_king > 0, combined, 0);
 
-    let rook_attacks =
-      self.gen_rook_moves(enemy_rooks | enemy_queens, Modifier::FLIP_SIDE) | enemy_rooks | enemy_queens;
+    let rook_attacks = self
+      .gen_rook_moves(enemy_rooks | enemy_queens, Modifier::FLIP_SIDE)
+      | enemy_rooks
+      | enemy_queens;
     let king_as_rook = self.gen_rook_moves(ally_king, Modifier::NONE) | ally_king;
     let combined = rook_attacks & king_as_rook;
     filter |= branchless_if(combined & ally_king > 0, combined, 0);

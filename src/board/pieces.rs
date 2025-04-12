@@ -9,8 +9,6 @@ pub struct Pieces {
   pub rooks: u64,
   pub queens: u64,
   pub king: u64,
-
-  pub pawns_advance: u64,
 }
 
 //constructors
@@ -27,7 +25,6 @@ impl Pieces {
       rooks: 9295429630892703744,
       queens: 576460752303423488,
       king: 1152921504606846976,
-      pawns_advance: 71776119061217280,
     }
   }
 
@@ -39,7 +36,6 @@ impl Pieces {
       rooks: 129,
       queens: 8,
       king: 16,
-      pawns_advance: 65280,
     }
   }
 }
@@ -100,10 +96,6 @@ impl Pieces {
     for piece in self.pieces_as_mut_array() {
       *piece &= !at_mask;
     }
-  }
-
-  pub fn remove_advance(&mut self, at_mask: u64) {
-    self.pawns_advance &= !at_mask;
   }
 
   pub fn is_empty(&self, at_mask: u64) -> bool {

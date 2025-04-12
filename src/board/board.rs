@@ -1,10 +1,8 @@
 use crate::board::move_generation::Modifier;
 
-//TODO: castiling, checks, checkmates?
+//TODO: castiling, changing game status, from_fen update
 use super::{
-  board_movement_trait::BoardMovement,
-  pieces::Pieces,
-  util_fns::branchless_if,
+  board_movement_trait::BoardMovement, pieces::Pieces, util_fns::branchless_if,
 };
 use bevy::ecs::system::Resource;
 
@@ -23,24 +21,41 @@ pub struct Board {
   pub white: Pieces,
   pub black: Pieces,
 
+  //updated during update_masks
   pub(super) empty_mask: u64,
+  pub(super) under_attack_mask: u64,
+
+  //should be initialized and updated during move_piece
   pub(super) advance_mask: u64,
   pub(super) en_passant_mask: u64,
-  pub(super) under_attack_mask: u64,
 }
 
 //constructor
 impl Board {
-  pub fn empty() -> Board {
+  pub fn default() -> Board {
     let mut board = Board {
+      white: Pieces::white(),
+      black: Pieces::black(),
+
+      ..Board::empty()
+    };
+
+    board.initialize_masks();
+    board
+  }
+
+  pub fn empty() -> Board {
+    Board {
+      status: Status::Playing,
+      white_turn: true,
       white: Pieces::empty(),
       black: Pieces::empty(),
 
-      ..Default::default()
-    };
-
-    board.update_masks();
-    board
+      empty_mask: 0,
+      advance_mask: 0,
+      en_passant_mask: 0,
+      under_attack_mask: 0,
+    }
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
@@ -161,8 +176,11 @@ impl Board {
       return false;
     }
 
+    self.update_masks();
+
     //calculating moves
-    let pawn_advance_move = self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
+    let pawn_advance_move =
+      self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
     let move_mask = to_mask & self.get_piece_moves(from_mask);
 
     //handling en passant logic
@@ -200,22 +218,25 @@ impl Board {
     self.black.move_piece(from_mask, move_mask);
 
     self.white_turn ^= move_mask > 0;
-    self.update_masks();
 
     return move_mask > 0;
   }
 
+  fn initialize_masks(&mut self) {
+    self.advance_mask = self.white.pawns | self.black.pawns;
+    self.en_passant_mask = 0;
+  }
+
   fn update_masks(&mut self) {
     self.empty_mask = !(self.white.pieces_concat() | self.black.pieces_concat());
-    self.advance_mask = self.white.pawns_advance | self.black.pawns_advance;
 
-    self.under_attack_mask = self.gen_pawn_capturing_moves(self.white.pawns, Modifier::FLIP_SIDE)
+    self.under_attack_mask = self
+      .gen_pawn_capturing_moves(self.white.pawns, Modifier::FLIP_SIDE)
       | self.gen_knight_moves(self.white.knights, Modifier::FLIP_SIDE)
       | self.gen_bishop_moves(self.white.bishops, Modifier::FLIP_SIDE)
       | self.gen_rook_moves(self.white.rooks, Modifier::FLIP_SIDE)
       | self.gen_queen_moves(self.white.queens, Modifier::FLIP_SIDE)
       | self.gen_king_moves(self.white.king, Modifier::FLIP_SIDE);
-
   }
 }
 
@@ -250,8 +271,10 @@ impl Board {
   }
 
   pub fn get_piece_moves(&self, at_mask: u64) -> u64 {
-    let pawn_default_move = self.gen_pawn_default_move(at_mask & self.pawns(), Modifier::NONE);
-    let pawn_advance_move = self.gen_pawn_advance_move(at_mask & self.pawns(), Modifier::NONE);
+    let pawn_default_move =
+      self.gen_pawn_default_move(at_mask & self.pawns(), Modifier::NONE);
+    let pawn_advance_move =
+      self.gen_pawn_advance_move(at_mask & self.pawns(), Modifier::NONE);
     let pawn_capturing_move =
       self.gen_pawn_capturing_moves(at_mask & self.pawns(), Modifier::NONE);
     let pawn_moves = pawn_default_move | pawn_advance_move | pawn_capturing_move;
@@ -259,8 +282,8 @@ impl Board {
     let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), Modifier::NONE);
     let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), Modifier::NONE);
     let queen_moves = self.gen_queen_moves(at_mask & self.queens(), Modifier::NONE);
-    let king_moves =
-      self.gen_king_moves(at_mask & self.kings(), Modifier::NONE) & !self.under_attack_mask;
+    let king_moves = self.gen_king_moves(at_mask & self.kings(), Modifier::NONE)
+      & !self.under_attack_mask;
 
     let pseudo =
       pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
@@ -269,24 +292,5 @@ impl Board {
     let check_filter = self.gen_check_filter(at_mask);
 
     pseudo & pin_filter & check_filter
-  }
-}
-
-impl Default for Board {
-  fn default() -> Board {
-    let mut board = Board {
-      white_turn: true,
-      white: Pieces::white(),
-      black: Pieces::black(),
-
-      status: Default::default(),
-      empty_mask: Default::default(),
-      advance_mask: Default::default(),
-      en_passant_mask: Default::default(),
-      under_attack_mask: Default::default(),
-    };
-
-    board.update_masks();
-    board
   }
 }
