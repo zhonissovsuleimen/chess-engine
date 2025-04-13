@@ -141,6 +141,41 @@ impl Board {
     self.gen_offset_moves(at_mask, offsets, modifier)
   }
 
+  pub(super) fn gen_king_long_castle_moves(&self, at_mask: u64, modifier: u64) -> u64 {
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
+    let rooks = branchless_if(white_turn, self.white.rooks, self.black.rooks);
+    let rook_pos = rooks & at_mask.move_left_mask(4);
+
+    let long_rights = self.castling_mask & rook_pos > 0 && self.castling_mask & at_mask > 0;
+    let long_empty = at_mask 
+      & self.empty_mask.move_right_mask(1)
+      & self.empty_mask.move_right_mask(2)
+      & self.empty_mask.move_right_mask(3) > 0;
+    let long_safe = at_mask
+      & !self.under_attack_mask
+      & !self.under_attack_mask.move_right_mask(2) > 0;
+
+    let new_pos = at_mask.move_left_mask(2);
+    new_pos & mask_from_bool(long_rights && long_empty && long_safe)
+  }
+
+  pub(super) fn gen_king_short_castle_moves(&self, at_mask: u64, modifier: u64) -> u64 {
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
+    let rooks = branchless_if(white_turn, self.white.rooks, self.black.rooks);
+    let rook_pos = rooks & at_mask.move_right_mask(3);
+
+    let short_rights = self.castling_mask & rook_pos > 0 && self.castling_mask & at_mask > 0;
+    let short_empty = at_mask 
+      & self.empty_mask.move_left_mask(1)
+      & self.empty_mask.move_left_mask(2) > 0;
+    let short_safe = at_mask
+      & !self.under_attack_mask
+      & !self.under_attack_mask.move_left_mask(2) > 0;
+
+    let new_pos = at_mask.move_right_mask(2);
+    new_pos & mask_from_bool(short_rights && short_empty && short_safe)
+  }
+
   pub(super) fn gen_offset_moves(
     &self,
     at_mask: u64,

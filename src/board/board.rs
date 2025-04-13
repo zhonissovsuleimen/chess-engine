@@ -1,6 +1,6 @@
-use crate::board::move_generation::Modifier;
+use crate::board::{move_generation::Modifier, util_fns::mask_from_bool};
 
-//TODO: castiling, changing game status, from_fen update
+//TODO: changing game status, from_fen update
 use super::{
   board_movement_trait::BoardMovement, pieces::Pieces, util_fns::branchless_if,
 };
@@ -28,6 +28,7 @@ pub struct Board {
   //should be initialized and updated during move_piece
   pub(super) advance_mask: u64,
   pub(super) en_passant_mask: u64,
+  pub(super) castling_mask: u64,
 }
 
 //constructor
@@ -55,6 +56,7 @@ impl Board {
       advance_mask: 0,
       en_passant_mask: 0,
       under_attack_mask: 0,
+      castling_mask: 0,
     }
   }
 
@@ -208,12 +210,31 @@ impl Board {
       0,
     );
 
+    //handling castling logic
+    let long_castled = self.gen_king_long_castle_moves(from_mask, Modifier::NONE) > 0;
+    let short_castled = self.gen_king_short_castle_moves(from_mask, Modifier::NONE) > 0;
+    let castled = long_castled || short_castled;
+    
+    let ally_king = branchless_if(self.white_turn, self.white.king, self.black.king);
+
+    let rook_castle_from = branchless_if(castled, branchless_if(long_castled, ally_king.move_left_mask(4), ally_king.move_right_mask(3)), 0);
+    let rook_castle_to = branchless_if(castled, branchless_if(long_castled, ally_king.move_left_mask(1), ally_king.move_right_mask(1)), 0);
+    
+    let rook_or_king_move = self.gen_default_king_moves(from_mask, Modifier::NONE) | self.gen_rook_moves(from_mask, Modifier::NONE);
+    self.castling_mask &= !branchless_if(castled, ally_king, 0);
+    self.castling_mask &= !branchless_if(to_mask & rook_or_king_move > 0, from_mask, 0);
+
     //moving
     self.black.remove_piece(move_mask);
     self.white.remove_piece(move_mask);
 
     self.white.move_piece(from_mask, move_mask);
     self.black.move_piece(from_mask, move_mask);
+
+    let white_rook_from = mask_from_bool(self.white_turn) & rook_castle_from;
+    let black_rook_from = !mask_from_bool(self.white_turn) & rook_castle_from;
+    self.white.move_piece(white_rook_from, rook_castle_to);
+    self.black.move_piece(black_rook_from, rook_castle_to);
 
     self.white_turn ^= move_mask > 0;
     self.update_masks();
@@ -223,6 +244,8 @@ impl Board {
   fn initialize_masks(&mut self) {
     self.advance_mask = self.white.pawns | self.black.pawns;
     self.en_passant_mask = 0;
+    self.castling_mask =
+      self.white.king | self.white.rooks | self.black.king | self.black.rooks;
 
     self.update_masks();
   }
@@ -282,8 +305,10 @@ impl Board {
     let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), Modifier::NONE);
     let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), Modifier::NONE);
     let queen_moves = self.gen_queen_moves(at_mask & self.queens(), Modifier::NONE);
-    let king_moves = self.gen_king_moves(at_mask & self.kings(), Modifier::NONE)
-      & !self.under_attack_mask;
+    let king_default_move = self.gen_default_king_moves(at_mask & self.kings(), Modifier::NONE) & !self.under_attack_mask;
+    let king_long_castle = self.gen_king_long_castle_moves(at_mask & self.kings(), Modifier::NONE);
+    let king_short_castle = self.gen_king_short_castle_moves(at_mask & self.kings(), Modifier::NONE);
+    let king_moves = king_default_move | king_long_castle | king_short_castle;
 
     let pseudo =
       pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
