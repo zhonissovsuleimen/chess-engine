@@ -19,37 +19,37 @@ impl Modifier {
 //piece moves
 impl Board {
   pub(super) fn gen_pawn_default_move(&self, at_mask: u64, modifier: u64) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
-    let pawn_default_move = branchless_if(
-      white_turn,
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
+    let pawn_default_move = if_mask(
+      white_turn_mask,
       at_mask.move_up_mask(1),
       at_mask.move_down_mask(1),
     );
 
-    pawn_default_move & self.empty_mask
+    pawn_default_move & self.empty
   }
 
   pub(super) fn gen_pawn_advance_move(&self, at_mask: u64, modifier: u64) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
     let default = self.gen_pawn_default_move(at_mask, modifier);
 
-    let can_default_mask = branchless_if(
-      white_turn,
+    let can_default_mask = if_mask(
+      white_turn_mask,
       default.move_up_mask(1),
       default.move_down_mask(1),
     );
-    let can_advance_mask = branchless_if(
-      white_turn,
+    let can_advance_mask = if_mask(
+      white_turn_mask,
       self.advance_mask.move_up_mask(2),
       self.advance_mask.move_down_mask(2),
     );
-    let pawn_advance_move = branchless_if(
-      white_turn,
+    let pawn_advance_move = if_mask(
+      white_turn_mask,
       at_mask.move_up_mask(2),
       at_mask.move_down_mask(2),
     );
 
-    pawn_advance_move & self.empty_mask & can_advance_mask & can_default_mask
+    pawn_advance_move & self.empty & can_advance_mask & can_default_mask
   }
 
   pub(super) fn gen_pawn_capturing_moves(
@@ -57,10 +57,10 @@ impl Board {
     at_mask: u64,
     modifier: u64,
   ) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
 
-    let enemy_mask = branchless_if(
-      white_turn,
+    let enemy_mask = if_mask(
+      white_turn_mask,
       self.black.pieces_concat(),
       self.white.pieces_concat(),
     );
@@ -69,13 +69,13 @@ impl Board {
     let one_move_up = at_mask.move_up_mask(1);
     let one_move_down = at_mask.move_down_mask(1);
 
-    let enemy_to_left = branchless_if(
-      white_turn,
+    let enemy_to_left = if_mask(
+      white_turn_mask,
       one_move_up.move_left_mask(1),
       one_move_down.move_left_mask(1),
     );
-    let enemy_to_right = branchless_if(
-      white_turn,
+    let enemy_to_right = if_mask(
+      white_turn_mask,
       one_move_up.move_right_mask(1),
       one_move_down.move_right_mask(1),
     );
@@ -142,35 +142,35 @@ impl Board {
   }
 
   pub(super) fn gen_king_long_castle_moves(&self, at_mask: u64, modifier: u64) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
-    let rooks = branchless_if(white_turn, self.white.rooks, self.black.rooks);
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
+    let rooks = if_mask(white_turn_mask, self.white.rooks, self.black.rooks);
     let rook_pos = rooks & at_mask.move_left_mask(4);
 
     let long_rights = self.castling_mask & rook_pos > 0 && self.castling_mask & at_mask > 0;
     let long_empty = at_mask 
-      & self.empty_mask.move_right_mask(1)
-      & self.empty_mask.move_right_mask(2)
-      & self.empty_mask.move_right_mask(3) > 0;
+      & self.empty.move_right_mask(1)
+      & self.empty.move_right_mask(2)
+      & self.empty.move_right_mask(3) > 0;
     let long_safe = at_mask
-      & !self.under_attack_mask
-      & !self.under_attack_mask.move_right_mask(2) > 0;
+      & !self.under_attack
+      & !self.under_attack.move_right_mask(2) > 0;
 
     let new_pos = at_mask.move_left_mask(2);
     new_pos & mask_from_bool(long_rights && long_empty && long_safe)
   }
 
   pub(super) fn gen_king_short_castle_moves(&self, at_mask: u64, modifier: u64) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
-    let rooks = branchless_if(white_turn, self.white.rooks, self.black.rooks);
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
+    let rooks = if_mask(white_turn_mask, self.white.rooks, self.black.rooks);
     let rook_pos = rooks & at_mask.move_right_mask(3);
 
     let short_rights = self.castling_mask & rook_pos > 0 && self.castling_mask & at_mask > 0;
     let short_empty = at_mask 
-      & self.empty_mask.move_left_mask(1)
-      & self.empty_mask.move_left_mask(2) > 0;
+      & self.empty.move_left_mask(1)
+      & self.empty.move_left_mask(2) > 0;
     let short_safe = at_mask
-      & !self.under_attack_mask
-      & !self.under_attack_mask.move_left_mask(2) > 0;
+      & !self.under_attack
+      & !self.under_attack.move_left_mask(2) > 0;
 
     let new_pos = at_mask.move_right_mask(2);
     new_pos & mask_from_bool(short_rights && short_empty && short_safe)
@@ -182,9 +182,9 @@ impl Board {
     offsets: Vec<(i32, i32)>,
     modifier: u64,
   ) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
-    let enemy_mask = branchless_if(
-      white_turn,
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
+    let enemy_mask = if_mask(
+      white_turn_mask,
       self.black.pieces_concat(),
       self.white.pieces_concat(),
     );
@@ -192,19 +192,19 @@ impl Board {
     let mut moves = 0;
 
     for (dx, dy) in offsets {
-      let mut new_move = branchless_if(
+      let mut new_move = if_bool(
         dx > 0,
         at_mask.move_right_mask(dx.abs() as u32),
         at_mask.move_left_mask(dx.abs() as u32),
       );
 
-      new_move = branchless_if(
+      new_move = if_bool(
         dy > 0,
         new_move.move_up_mask(dy.abs() as u32),
         new_move.move_down_mask(dy.abs() as u32),
       );
 
-      moves |= new_move & (self.empty_mask | enemy_mask);
+      moves |= new_move & (self.empty | enemy_mask);
     }
 
     moves
@@ -217,9 +217,9 @@ impl Board {
     dy: i32,
     modifier: u64,
   ) -> u64 {
-    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
-    let enemy_mask = branchless_if(
-      white_turn,
+    let white_turn_mask = mask_from_bool(self.white_turn ^ Modifier::flip_side(modifier));
+    let enemy_mask = if_mask(
+      white_turn_mask,
       self.black.pieces_concat(),
       self.white.pieces_concat(),
     );
@@ -227,12 +227,12 @@ impl Board {
     let mut moves = 0;
     let mut current = (dx, dy);
     loop {
-      let mut new_move = branchless_if(
+      let mut new_move = if_bool(
         dx > 0,
         at_mask.move_right_mask(current.0.abs() as u32),
         at_mask.move_left_mask(current.0.abs() as u32),
       );
-      new_move = branchless_if(
+      new_move = if_bool(
         dy > 0,
         new_move.move_up_mask(current.1.abs() as u32),
         new_move.move_down_mask(current.1.abs() as u32),
@@ -242,10 +242,10 @@ impl Board {
 
       let within_board = new_move > 0;
       let is_enemy = new_move & enemy_mask > 0;
-      let is_empty = new_move & self.empty_mask > 0;
+      let is_empty = new_move & self.empty > 0;
       let is_ally = !(is_empty || is_enemy);
 
-      moves |= branchless_if(is_enemy || is_empty, new_move, 0);
+      moves |= if_bool(is_enemy || is_empty, new_move, 0);
 
       if !within_board || is_ally || is_enemy {
         break;
@@ -259,14 +259,9 @@ impl Board {
 //other
 impl Board {
   fn gen_pin_path(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
-    let enemy_mask = branchless_if(
-      self.white_turn,
-      self.black.pieces_concat(),
-      self.white.pieces_concat(),
-    );
     let white_attackers = self.white.bishops | self.white.rooks | self.white.queens;
     let black_attackers = self.black.bishops | self.black.rooks | self.black.queens;
-    let correct_pieces = branchless_if(self.white_turn, black_attackers, white_attackers);
+    let correct_pieces = if_mask(self.white_turn_mask, black_attackers, white_attackers);
 
     let mut pin_path = 0;
     let mut current = (dx, dy);
@@ -276,12 +271,12 @@ impl Board {
     let mut pinned;
 
     loop {
-      let mut new_move = branchless_if(
+      let mut new_move = if_bool(
         dx > 0,
         at_mask.move_right_mask(current.0.abs() as u32),
         at_mask.move_left_mask(current.0.abs() as u32),
       );
-      new_move = branchless_if(
+      new_move = if_bool(
         dy > 0,
         new_move.move_up_mask(current.1.abs() as u32),
         new_move.move_down_mask(current.1.abs() as u32),
@@ -290,9 +285,8 @@ impl Board {
       current = (current.0 + dx, current.1 + dy);
 
       let within_board = new_move > 0;
-      let is_enemy = new_move & enemy_mask > 0;
-      let is_empty = new_move & self.empty_mask > 0;
-      let is_ally = !(is_empty || is_enemy);
+      let is_enemy = new_move & self.enemy > 0;
+      let is_ally = new_move & self.ally > 0;
 
       enemy_count += is_enemy as u64;
       ally_count += is_ally as u64;
@@ -309,57 +303,55 @@ impl Board {
       }
     }
 
-    branchless_if(pinned, pin_path, 0)
+    if_bool(pinned, pin_path, 0)
   }
 
   pub(super) fn gen_pin_filter(&self, at_mask: u64) -> u64 {
-    let ally_king = branchless_if(self.white_turn, self.white.king, self.black.king);
     let mut pin_filter = 0;
 
-    pin_filter |= self.gen_pin_path(ally_king, -1, -1);
-    pin_filter |= self.gen_pin_path(ally_king, 1, -1);
-    pin_filter |= self.gen_pin_path(ally_king, -1, 1);
-    pin_filter |= self.gen_pin_path(ally_king, 1, 1);
-    pin_filter |= self.gen_pin_path(ally_king, -1, 0);
-    pin_filter |= self.gen_pin_path(ally_king, 0, -1);
-    pin_filter |= self.gen_pin_path(ally_king, 1, 0);
-    pin_filter |= self.gen_pin_path(ally_king, 0, 1);
+    pin_filter |= self.gen_pin_path(self.ally_king, -1, -1);
+    pin_filter |= self.gen_pin_path(self.ally_king, 1, -1);
+    pin_filter |= self.gen_pin_path(self.ally_king, -1, 1);
+    pin_filter |= self.gen_pin_path(self.ally_king, 1, 1);
+    pin_filter |= self.gen_pin_path(self.ally_king, -1, 0);
+    pin_filter |= self.gen_pin_path(self.ally_king, 0, -1);
+    pin_filter |= self.gen_pin_path(self.ally_king, 1, 0);
+    pin_filter |= self.gen_pin_path(self.ally_king, 0, 1);
 
-    branchless_if(pin_filter & at_mask > 0, pin_filter, u64::MAX)
+    if_bool(pin_filter & at_mask > 0, pin_filter, u64::MAX)
   }
 
   pub(super) fn gen_check_filter(&self, at_mask: u64) -> u64 {
-    let ally_king = branchless_if(self.white_turn, self.white.king, self.black.king);
-    let enemy_pawns = branchless_if(self.white_turn, self.black.pawns, self.white.pawns);
+    let enemy_pawns = if_mask(self.white_turn_mask, self.black.pawns, self.white.pawns);
     let enemy_knights =
-      branchless_if(self.white_turn, self.black.knights, self.white.knights);
+      if_mask(self.white_turn_mask, self.black.knights, self.white.knights);
     let enemy_bishops =
-      branchless_if(self.white_turn, self.black.bishops, self.white.bishops);
-    let enemy_rooks = branchless_if(self.white_turn, self.black.rooks, self.white.rooks);
+      if_mask(self.white_turn_mask, self.black.bishops, self.white.bishops);
+    let enemy_rooks = if_mask(self.white_turn_mask, self.black.rooks, self.white.rooks);
     let enemy_queens =
-      branchless_if(self.white_turn, self.black.queens, self.white.queens);
+      if_mask(self.white_turn_mask, self.black.queens, self.white.queens);
 
     let mut filter = 0;
-    filter |= self.gen_pawn_capturing_moves(ally_king, Modifier::NONE) & enemy_pawns;
-    filter |= self.gen_knight_moves(ally_king, Modifier::NONE) & enemy_knights;
-    filter |= branchless_if(at_mask == ally_king, u64::MAX, 0);
+    filter |= self.gen_pawn_capturing_moves(self.ally_king, Modifier::NONE) & enemy_pawns;
+    filter |= self.gen_knight_moves(self.ally_king, Modifier::NONE) & enemy_knights;
+    filter |= if_bool(at_mask == self.ally_king, u64::MAX, 0);
 
     let bishop_attacks = self
       .gen_bishop_moves(enemy_bishops | enemy_queens, Modifier::FLIP_SIDE)
       | enemy_bishops
       | enemy_queens;
-    let king_as_bishop = self.gen_bishop_moves(ally_king, Modifier::NONE) | ally_king;
+    let king_as_bishop = self.gen_bishop_moves(self.ally_king, Modifier::NONE) | self.ally_king;
     let combined = bishop_attacks & king_as_bishop;
-    filter |= branchless_if(combined & ally_king > 0, combined, 0);
+    filter |= if_bool(combined & self.ally_king > 0, combined, 0);
 
     let rook_attacks = self
       .gen_rook_moves(enemy_rooks | enemy_queens, Modifier::FLIP_SIDE)
       | enemy_rooks
       | enemy_queens;
-    let king_as_rook = self.gen_rook_moves(ally_king, Modifier::NONE) | ally_king;
+    let king_as_rook = self.gen_rook_moves(self.ally_king, Modifier::NONE) | self.ally_king;
     let combined = rook_attacks & king_as_rook;
-    filter |= branchless_if(combined & ally_king > 0, combined, 0);
+    filter |= if_bool(combined & self.ally_king > 0, combined, 0);
 
-    branchless_if(filter > 0, filter, u64::MAX)
+    if_bool(filter > 0, filter, u64::MAX)
   }
 }
