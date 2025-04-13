@@ -176,8 +176,6 @@ impl Board {
       return false;
     }
 
-    self.update_masks();
-
     //calculating moves
     let pawn_advance_move =
       self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
@@ -218,13 +216,15 @@ impl Board {
     self.black.move_piece(from_mask, move_mask);
 
     self.white_turn ^= move_mask > 0;
-
+    self.update_masks();
     return move_mask > 0;
   }
 
   fn initialize_masks(&mut self) {
     self.advance_mask = self.white.pawns | self.black.pawns;
     self.en_passant_mask = 0;
+
+    self.update_masks();
   }
 
   fn update_masks(&mut self) {
@@ -264,10 +264,6 @@ impl Board {
 
   fn kings(&self) -> u64 {
     self.white.king | self.black.king
-  }
-
-  pub fn get_piece_delta(&self) -> i32 {
-    self.white.get_value() - self.black.get_value()
   }
 
   pub fn get_piece_moves(&self, at_mask: u64) -> u64 {
