@@ -1,31 +1,25 @@
 use super::{Board, board_movement_trait::BoardMovement, util_fns::*};
 
-pub struct Modifier {
-  flip_side: bool,
-  ignore_enemy: bool,
-}
+pub struct Modifier;
 
 impl Modifier {
-  pub const NONE: &Modifier = &Modifier {
-    flip_side: false,
-    ignore_enemy: false,
-  };
+  pub const NONE: u64 = 0; 
+  pub const FLIP_SIDE: u64 = 1; 
+  pub const NO_ENEMY_CHECK: u64 = 2; 
 
-  pub const FLIP_SIDE: &Modifier = &Modifier {
-    flip_side: true,
-    ignore_enemy: false,
-  };
+  pub fn flip_side(value: u64) -> bool {
+    value & Modifier::FLIP_SIDE == 1
+  }
 
-  pub const NO_ENEMY_CHECK: &Modifier = &Modifier {
-    flip_side: false,
-    ignore_enemy: true,
-  };
+  pub fn no_enemy_check(value: u64) -> bool {
+    value & Modifier::NO_ENEMY_CHECK == 1
+  }
 }
 
 //piece moves
 impl Board {
-  pub(super) fn gen_pawn_default_move(&self, at_mask: u64, modifier: &Modifier) -> u64 {
-    let white_turn = self.white_turn ^ modifier.flip_side;
+  pub(super) fn gen_pawn_default_move(&self, at_mask: u64, modifier: u64) -> u64 {
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
     let pawn_default_move = branchless_if(
       white_turn,
       at_mask.move_up_mask(1),
@@ -35,8 +29,8 @@ impl Board {
     pawn_default_move & self.empty_mask
   }
 
-  pub(super) fn gen_pawn_advance_move(&self, at_mask: u64, modifier: &Modifier) -> u64 {
-    let white_turn = self.white_turn ^ modifier.flip_side;
+  pub(super) fn gen_pawn_advance_move(&self, at_mask: u64, modifier: u64) -> u64 {
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
     let default = self.gen_pawn_default_move(at_mask, modifier);
 
     let can_default_mask = branchless_if(
@@ -61,16 +55,16 @@ impl Board {
   pub(super) fn gen_pawn_capturing_moves(
     &self,
     at_mask: u64,
-    modifier: &Modifier,
+    modifier: u64,
   ) -> u64 {
-    let white_turn = self.white_turn ^ modifier.flip_side;
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
 
     let enemy_mask = branchless_if(
       white_turn,
       self.black.pieces_concat(),
       self.white.pieces_concat(),
     );
-    let ignore_mask = mask_from_bool(modifier.ignore_enemy);
+    let ignore_mask = mask_from_bool(Modifier::no_enemy_check(modifier));
 
     let one_move_up = at_mask.move_up_mask(1);
     let one_move_down = at_mask.move_down_mask(1);
@@ -89,7 +83,7 @@ impl Board {
     (enemy_to_left | enemy_to_right) & (ignore_mask | enemy_mask | self.en_passant_mask)
   }
 
-  pub(super) fn gen_knight_moves(&self, at_mask: u64, modifier: &Modifier) -> u64 {
+  pub(super) fn gen_knight_moves(&self, at_mask: u64, modifier: u64) -> u64 {
     let offsets = [
       (-1, -2),
       (1, -2),
@@ -105,7 +99,7 @@ impl Board {
     self.gen_offset_moves(at_mask, offsets, modifier)
   }
 
-  pub(super) fn gen_bishop_moves(&self, at_mask: u64, modifier: &Modifier) -> u64 {
+  pub(super) fn gen_bishop_moves(&self, at_mask: u64, modifier: u64) -> u64 {
     let mut moves = 0;
 
     moves |= self.gen_iterative_moves(at_mask, -1, -1, modifier);
@@ -116,7 +110,7 @@ impl Board {
     moves
   }
 
-  pub(super) fn gen_rook_moves(&self, at_mask: u64, modifier: &Modifier) -> u64 {
+  pub(super) fn gen_rook_moves(&self, at_mask: u64, modifier: u64) -> u64 {
     let mut moves = 0;
 
     moves |= self.gen_iterative_moves(at_mask, -1, 0, modifier);
@@ -127,11 +121,11 @@ impl Board {
     moves
   }
 
-  pub(super) fn gen_queen_moves(&self, at_mask: u64, modifier: &Modifier) -> u64 {
+  pub(super) fn gen_queen_moves(&self, at_mask: u64, modifier: u64) -> u64 {
     self.gen_bishop_moves(at_mask, modifier) | self.gen_rook_moves(at_mask, modifier)
   }
 
-  pub(super) fn gen_king_moves(&self, at_mask: u64, modifier: &Modifier) -> u64 {
+  pub(super) fn gen_default_king_moves(&self, at_mask: u64, modifier: u64) -> u64 {
     let offsets = [
       (-1, -1),
       (0, -1),
@@ -151,9 +145,9 @@ impl Board {
     &self,
     at_mask: u64,
     offsets: Vec<(i32, i32)>,
-    modifier: &Modifier,
+    modifier: u64,
   ) -> u64 {
-    let white_turn = self.white_turn ^ modifier.flip_side;
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
     let enemy_mask = branchless_if(
       white_turn,
       self.black.pieces_concat(),
@@ -186,9 +180,9 @@ impl Board {
     at_mask: u64,
     dx: i32,
     dy: i32,
-    modifier: &Modifier,
+    modifier: u64,
   ) -> u64 {
-    let white_turn = self.white_turn ^ modifier.flip_side;
+    let white_turn = self.white_turn ^ Modifier::flip_side(modifier);
     let enemy_mask = branchless_if(
       white_turn,
       self.black.pieces_concat(),

@@ -177,8 +177,6 @@ impl Board {
     }
 
     //calculating moves
-    let pawn_advance_move =
-      self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
     let move_mask = to_mask & self.get_piece_moves(from_mask);
 
     //handling en passant logic
@@ -196,6 +194,8 @@ impl Board {
     self.black.remove_piece(to_remove);
 
     //handling pawn advance logic
+    let pawn_advance_move =
+      self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
     let pawn_advanced = move_mask & pawn_advance_move > 0;
     self.advance_mask &= !(branchless_if(pawn_advanced, from_mask, 0));
     self.en_passant_mask = branchless_if(
@@ -230,13 +230,17 @@ impl Board {
   fn update_masks(&mut self) {
     self.empty_mask = !(self.white.pieces_concat() | self.black.pieces_concat());
 
+
+    let pieces = branchless_if(self.white_turn, self.black.pieces_concat(), self.white.pieces_concat());
+
     self.under_attack_mask = self
-      .gen_pawn_capturing_moves(self.white.pawns, Modifier::FLIP_SIDE)
-      | self.gen_knight_moves(self.white.knights, Modifier::FLIP_SIDE)
-      | self.gen_bishop_moves(self.white.bishops, Modifier::FLIP_SIDE)
-      | self.gen_rook_moves(self.white.rooks, Modifier::FLIP_SIDE)
-      | self.gen_queen_moves(self.white.queens, Modifier::FLIP_SIDE)
-      | self.gen_king_moves(self.white.king, Modifier::FLIP_SIDE);
+      .gen_pawn_capturing_moves(self.pawns() & pieces, Modifier::NO_ENEMY_CHECK)
+      | self.gen_knight_moves(self.knights() & pieces, Modifier::NONE)
+      | self.gen_bishop_moves(self.bishops() & pieces, Modifier::NONE)
+      | self.gen_rook_moves(self.rooks() & pieces, Modifier::NONE)
+      | self.gen_queen_moves(self.queens() & pieces, Modifier::NONE)
+      | self.gen_default_king_moves(self.kings() & pieces, Modifier::NONE);
+
   }
 }
 
