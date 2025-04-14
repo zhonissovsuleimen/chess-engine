@@ -1,21 +1,13 @@
-//TODO: changing game status, full/half time clocks, fifty-move rule
+//TODO: full/half time clocks, fifty-move rule
 use super::{
-  board_movement_trait::BoardMovement, move_generation::Modifier, pieces::Pieces,
+  board_movement_trait::BoardMovement, move_generation_modifiers::*, pieces::Pieces, status::*,
   util_fns::*,
 };
 use bevy::ecs::system::Resource;
 
-#[derive(PartialEq, Default)]
-pub enum Status {
-  #[default]
-  Playing,
-  WhiteWon,
-  BlackWon,
-}
-
 #[derive(Resource)]
 pub struct Board {
-  pub status: Status,
+  pub status: u64,
   pub white_turn: bool,
   pub white: Pieces,
   pub black: Pieces,
@@ -50,7 +42,7 @@ impl Board {
 
   pub fn empty() -> Board {
     Board {
-      status: Status::Playing,
+      status: PLAYING,
       white_turn: true,
       white: Pieces::empty(),
       black: Pieces::empty(),
@@ -144,7 +136,9 @@ impl Board {
           'Q' => board.castling_mask |= 0x11_00_00_00_00_00_00_00,
           'k' => board.castling_mask |= 0x00_00_00_00_00_00_00_90,
           'q' => board.castling_mask |= 0x00_00_00_00_00_00_00_11,
-          wrong_char => panic!("Unexpected character ({wrong_char}) in castling rights data")
+          wrong_char => {
+            panic!("Unexpected character ({wrong_char}) in castling rights data")
+          }
         }
       }
     }
@@ -193,7 +187,7 @@ impl Board {
 //moving/updating
 impl Board {
   pub fn move_piece(&mut self, from_id: usize, to_id: usize) -> bool {
-    let playing = self.status == Status::Playing;
+    let playing = self.status == PLAYING;
     let from_mask: u64 = if_bool(playing && from_id < 64, 1 << from_id, 0) & self.ally;
     let to_mask: u64 = if_bool(playing && to_id < 64, 1 << to_id, 0) & !self.ally;
 
@@ -201,7 +195,7 @@ impl Board {
 
     //handling en passant logic
     let en_passanted = mask_from_bool(to_mask & self.en_passant_mask > 0);
-    let en_pessanted_pawn = en_passanted
+    let en_passanted_pawn = en_passanted
       & if_mask(
         self.white_turn_mask,
         move_mask.move_down_mask(1),
@@ -209,21 +203,22 @@ impl Board {
       );
 
     //handling pawn advance logic
-    let pawn_advance_move =
-      self.gen_pawn_advance_move(from_mask & self.pawns(), Modifier::NONE);
+    let pawn_advance_move = self.gen_pawn_advance_move(from_mask & self.pawns());
     let pawn_advanced = mask_from_bool(to_mask & pawn_advance_move > 0);
     self.advance_mask &= !(pawn_advanced & from_mask);
-    self.en_passant_mask = if_mask(
-      self.white_turn_mask,
-      move_mask.move_down_mask(1),
-      move_mask.move_up_mask(1),
+    self.en_passant_mask = if_bool(
+      to_mask > 0,
+      if_mask(
+        self.white_turn_mask,
+        pawn_advance_move.move_down_mask(1),
+        pawn_advance_move.move_up_mask(1),
+      ),
+      self.en_passant_mask,
     );
 
     //handling castling logic
-    let long_castled =
-      mask_from_bool(self.gen_king_long_castle_moves(from_mask, Modifier::NONE) > 0);
-    let short_castled =
-      mask_from_bool(self.gen_king_short_castle_moves(from_mask, Modifier::NONE) > 0);
+    let long_castled = mask_from_bool(self.gen_king_long_castle_moves(from_mask) > 0);
+    let short_castled = mask_from_bool(self.gen_king_short_castle_moves(from_mask) > 0);
     let castled = long_castled | short_castled;
 
     let rook_castle_from = castled
@@ -240,15 +235,16 @@ impl Board {
         self.ally_king.move_right_mask(1),
       );
 
-    let rook_or_king_moves = self.gen_default_king_moves(from_mask, Modifier::NONE) | self.gen_rook_moves(from_mask, Modifier::NONE);
-    let revoke_castling = mask_from_bool(to_mask & rook_or_king_moves > 0); 
+    let rook_or_king_moves =
+      self.gen_king_default_moves(from_mask, NONE) | self.gen_rook_moves(from_mask, NONE);
+    let revoke_castling = mask_from_bool(to_mask & rook_or_king_moves > 0);
     self.castling_mask &= (castled | revoke_castling) & self.ally;
 
     //moving
     self.black.remove_piece(move_mask);
     self.white.remove_piece(move_mask);
-    self.white.remove_piece(en_pessanted_pawn);
-    self.black.remove_piece(en_pessanted_pawn);
+    self.white.remove_piece(en_passanted_pawn);
+    self.black.remove_piece(en_passanted_pawn);
 
     self.white.move_piece(from_mask, move_mask);
     self.black.move_piece(from_mask, move_mask);
@@ -260,14 +256,14 @@ impl Board {
 
     self.white_turn ^= move_mask > 0;
     self.update_masks();
+    self.update_status();
     return move_mask > 0;
   }
 
   fn initialize_masks(&mut self) {
     self.advance_mask = self.white.pawns | self.black.pawns;
     self.en_passant_mask = 0;
-    self.castling_mask =
-      self.white.king | self.white.rooks | self.black.king | self.black.rooks;
+    self.castling_mask = self.white.king | self.white.rooks | self.black.king | self.black.rooks;
 
     self.update_masks();
   }
@@ -287,19 +283,26 @@ impl Board {
     self.empty = !(self.ally | self.enemy);
     self.ally_king = if_mask(self.white_turn_mask, self.white.king, self.black.king);
 
-    let pieces = if_mask(
-      self.white_turn_mask,
-      self.black.pieces_concat(),
-      self.white.pieces_concat(),
-    );
-
     self.under_attack = self
-      .gen_pawn_capturing_moves(self.pawns() & pieces, Modifier::FLIP_SIDE | Modifier::NO_ENEMY_CHECK)
-      | self.gen_knight_moves(self.knights() & pieces, Modifier::FLIP_SIDE)
-      | self.gen_bishop_moves(self.bishops() & pieces, Modifier::FLIP_SIDE)
-      | self.gen_rook_moves(self.rooks() & pieces, Modifier::FLIP_SIDE)
-      | self.gen_queen_moves(self.queens() & pieces, Modifier::FLIP_SIDE)
-      | self.gen_default_king_moves(self.kings() & pieces, Modifier::FLIP_SIDE);
+      .gen_pawn_capturing_moves(self.pawns() & self.enemy, ALLY_IS_ENEMY | EMPTY_IS_ENEMY)
+      | self.gen_knight_moves(self.knights() & self.enemy, ALLY_IS_ENEMY)
+      | self.gen_bishop_moves(self.bishops() & self.enemy, ALLY_IS_ENEMY)
+      | self.gen_rook_moves(self.rooks() & self.enemy, ALLY_IS_ENEMY)
+      | self.gen_queen_moves(self.queens() & self.enemy, ALLY_IS_ENEMY)
+      | self.gen_king_default_moves(self.kings() & self.enemy, ALLY_IS_ENEMY);
+  }
+
+  fn update_status(&mut self) {
+    let checked = self.under_attack & self.ally_king > 0;
+    let no_moves = self.get_piece_moves(self.ally) == 0;
+
+    let winner = if_mask(self.white_turn_mask, BLACK_WON, WHITE_WON);
+
+    let checkmate = mask_from_bool(checked & no_moves);
+    let stalemate = mask_from_bool(!checked & no_moves);
+
+    self.status = (checkmate & winner) | (stalemate & DRAW);
+    println!("{}", self.status);
   }
 }
 
@@ -330,27 +333,21 @@ impl Board {
   }
 
   pub fn get_piece_moves(&self, at_mask: u64) -> u64 {
-    let pawn_default_move = self.gen_pawn_default_move(at_mask & self.pawns(), Modifier::NONE);
-    let pawn_advance_move =
-      self.gen_pawn_advance_move(at_mask & self.pawns(), Modifier::NONE);
-    let pawn_capturing_move =
-      self.gen_pawn_capturing_moves(at_mask & self.pawns(), Modifier::NONE);
+    let pawn_default_move = self.gen_pawn_default_move(at_mask & self.pawns());
+    let pawn_advance_move = self.gen_pawn_advance_move(at_mask & self.pawns());
+    let pawn_capturing_move = self.gen_pawn_capturing_moves(at_mask & self.pawns(), NONE);
     let pawn_moves = pawn_default_move | pawn_advance_move | pawn_capturing_move;
-    let knight_moves = self.gen_knight_moves(at_mask & self.knights(), Modifier::NONE);
-    let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), Modifier::NONE);
-    let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), Modifier::NONE);
-    let queen_moves = self.gen_queen_moves(at_mask & self.queens(), Modifier::NONE);
-    let king_default_move = self
-      .gen_default_king_moves(at_mask & self.kings(), Modifier::NONE)
-      & !self.under_attack;
-    let king_long_castle =
-      self.gen_king_long_castle_moves(at_mask & self.kings(), Modifier::NONE);
-    let king_short_castle =
-      self.gen_king_short_castle_moves(at_mask & self.kings(), Modifier::NONE);
+    let knight_moves = self.gen_knight_moves(at_mask & self.knights(), NONE);
+    let bishop_moves = self.gen_bishop_moves(at_mask & self.bishops(), NONE);
+    let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), NONE);
+    let queen_moves = self.gen_queen_moves(at_mask & self.queens(), NONE);
+    let king_default_move =
+      self.gen_king_default_moves(at_mask & self.kings(), NONE) & !self.under_attack;
+    let king_long_castle = self.gen_king_long_castle_moves(at_mask & self.kings());
+    let king_short_castle = self.gen_king_short_castle_moves(at_mask & self.kings());
     let king_moves = king_default_move | king_long_castle | king_short_castle;
 
-    let pseudo =
-      pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
+    let pseudo = pawn_moves | knight_moves | bishop_moves | rook_moves | queen_moves | king_moves;
 
     let pin_filter = self.gen_pin_filter(at_mask);
     let check_filter = self.gen_check_filter(at_mask);
