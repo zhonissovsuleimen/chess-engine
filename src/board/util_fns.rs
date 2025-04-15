@@ -8,5 +8,5 @@ pub fn if_mask(condition_mask: u64, if_true: u64, if_false: u64) -> u64 {
 }
 
 pub fn mask_from_bool(condition: bool) -> u64 {
-  !((condition as u64).wrapping_sub(1))
+  (condition as u64).wrapping_neg()
 }

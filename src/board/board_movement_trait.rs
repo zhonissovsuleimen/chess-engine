@@ -1,3 +1,5 @@
+use super::util_fns::mask_from_bool;
+
 pub trait BoardMovement {
   fn move_left_mask(self, amount: u32) -> u64;
   fn move_up_mask(self, amount: u32) -> u64;
@@ -7,34 +9,30 @@ pub trait BoardMovement {
 
 impl BoardMovement for u64 {
   fn move_left_mask(self, amount: u32) -> u64 {
-    let mut result = 0;
-
-    for i in 0..8 {
-      const MASK: u64 = 0b11111111;
-      let mut byte = ((self >> (i * 8)) & MASK) as u8;
-      byte = if amount < 8 { byte >> amount } else { 0 };
-      result |= (byte as u64) << (i * 8);
-    }
-    result
+    let shift = amount & 7;
+    let byte_shift_mask = (0xFF >> shift) as u64;
+    let per_byte_mask = 0x0101010101010101u64.wrapping_mul(byte_shift_mask);
+    let mask = mask_from_bool(amount < 8);
+    (self >> shift) & (per_byte_mask & mask)
   }
 
   fn move_up_mask(self, amount: u32) -> u64 {
-    if amount < 8 { self >> 8 * amount } else { 0 }
+    let shift = 8 * (amount & 7);
+    let mask = mask_from_bool(amount < 8);
+    (self >> shift) & mask
   }
 
   fn move_right_mask(self, amount: u32) -> u64 {
-    let mut result = 0;
-
-    for i in 0..8 {
-      const MASK: u64 = 0b11111111;
-      let mut byte = ((self >> (i * 8)) & MASK) as u8;
-      byte = if amount < 8 { byte << amount } else { 0 };
-      result |= (byte as u64) << (i * 8);
-    }
-    result
+    let shift = amount & 7;
+    let byte_shift_mask = (0xFF << shift) as u64;
+    let per_byte_mask = 0x0101010101010101u64.wrapping_mul(byte_shift_mask);
+    let mask = mask_from_bool(amount < 8);
+    (self << shift) & per_byte_mask & mask
   }
 
   fn move_down_mask(self, amount: u32) -> u64 {
-    if amount < 8 { self << 8 * amount } else { 0 }
+    let shift = 8 * (amount & 7);
+    let mask = ((amount < 8) as u64).wrapping_neg();
+    (self << shift) & mask
   }
 }
