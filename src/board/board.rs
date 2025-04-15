@@ -1,4 +1,3 @@
-//TODO: full/half time clocks, fifty-move rule
 use super::{
   board_movement_trait::BoardMovement, move_generation_modifiers::*, pieces::Pieces, status::*,
   util_fns::*,
@@ -65,7 +64,6 @@ impl Board {
   }
 
   pub fn from_fen(fen_string: &str) -> Board {
-    //todo: pawn advance mask depending on rank
     let mut board = Board::empty();
 
     let slices: Vec<&str> = fen_string.split_whitespace().collect();
@@ -250,14 +248,15 @@ impl Board {
 
     let checkmate = mask_from_bool(checked & no_moves);
     let stalemate = mask_from_bool(!checked & no_moves);
+    let fifty_move = mask_from_bool(self.half_clock > 100);
 
-    self.status = (checkmate & winner) | (stalemate & DRAW);
+    self.status = (checkmate & winner) | (fifty_move | stalemate & DRAW);
   }
 
   fn update_clocks(&mut self, from_mask: u64, move_mask: u64) {
-    let pawn_move = self.gen_pawn_default_move(from_mask) | self.gen_pawn_advance_move(from_mask);
-    let capture_or_pawn = mask_from_bool(move_mask & (pawn_move | self.enemy) > 0);
-    self.half_clock = capture_or_pawn & (self.half_clock + 1);
+    let pawn_moved = move_mask & self.gen_pawn_default_move(from_mask) > 0 || self.en_passant_mask > 0;
+    let capture_or_pawn = mask_from_bool(pawn_moved || move_mask & self.enemy > 0);
+    self.half_clock = if_bool(move_mask > 0, !capture_or_pawn & (self.half_clock + 1), self.half_clock);
 
     self.clock += (move_mask > 0 && !self.white_turn) as u64;
   }
