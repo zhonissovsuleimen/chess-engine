@@ -120,15 +120,14 @@ impl Board {
   }
 
   pub(super) fn gen_king_long_castle_moves(&self, at_mask: u64) -> u64 {
-    let rooks = if_mask(self.white_turn_mask, self.white.rooks, self.black.rooks);
-    let rook_pos = rooks & at_mask.move_left_mask(4);
+    let rooks = self.rooks() | self.ally;
+    let long_rook = rooks & at_mask.move_left_mask(4);
 
-    let long_rights = self.castling_mask & rook_pos > 0 && self.castling_mask & at_mask > 0;
+    let long_rights = self.castling_mask & long_rook > 0 && self.castling_mask & at_mask > 0;
     let long_empty = at_mask
       & self.empty.move_right_mask(1)
       & self.empty.move_right_mask(2)
-      & self.empty.move_right_mask(3)
-      > 0;
+      & self.empty.move_right_mask(3) > 0;
     let long_safe = at_mask & !self.under_attack & !self.under_attack.move_right_mask(2) > 0;
 
     let new_pos = at_mask.move_left_mask(2);
@@ -136,11 +135,13 @@ impl Board {
   }
 
   pub(super) fn gen_king_short_castle_moves(&self, at_mask: u64) -> u64 {
-    let rooks = if_mask(self.white_turn_mask, self.white.rooks, self.black.rooks);
-    let rook_pos = rooks & at_mask.move_right_mask(3);
+    let rooks = self.rooks() | self.ally;
+    let short_rook = rooks & at_mask.move_right_mask(3);
 
-    let short_rights = self.castling_mask & rook_pos > 0 && self.castling_mask & at_mask > 0;
-    let short_empty = at_mask & self.empty.move_left_mask(1) & self.empty.move_left_mask(2) > 0;
+    let short_rights = self.castling_mask & short_rook > 0 && self.castling_mask & at_mask > 0;
+    let short_empty = at_mask 
+      & self.empty.move_left_mask(1) 
+      & self.empty.move_left_mask(2) > 0;
     let short_safe = at_mask & !self.under_attack & !self.under_attack.move_left_mask(2) > 0;
 
     let new_pos = at_mask.move_right_mask(2);

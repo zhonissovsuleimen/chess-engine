@@ -83,34 +83,36 @@ impl Pieces {
 //moves & state
 impl Pieces {
   pub fn move_piece(&mut self, from_mask: u64, to_mask: u64) {
-    let valid = from_mask > 0 && to_mask > 0;
+    let pieces = self.pieces_concat();
+    let valid = from_mask & pieces > 0 && !pieces & to_mask > 0;
+
     self.pawns = if_bool(
-      valid && self.pawns & from_mask > 0,
+      valid && self.is_pawn(from_mask),
       (self.pawns & !from_mask) | to_mask,
       self.pawns,
     );
     self.knights = if_bool(
-      valid && self.knights & from_mask > 0,
+      valid && self.is_knight(from_mask),
       (self.knights & !from_mask) | to_mask,
       self.knights,
     );
     self.bishops = if_bool(
-      valid && self.bishops & from_mask > 0,
+      valid && self.is_bishop(from_mask),
       (self.bishops & !from_mask) | to_mask,
       self.bishops,
     );
     self.rooks = if_bool(
-      valid && self.rooks & from_mask > 0,
+      valid && self.is_rook(from_mask),
       (self.rooks & !from_mask) | to_mask,
       self.rooks,
     );
     self.queens = if_bool(
-      valid && self.queens & from_mask > 0,
+      valid && self.is_queen(from_mask),
       (self.queens & !from_mask) | to_mask,
       self.queens,
     );
     self.king = if_bool(
-      valid && self.king & from_mask > 0,
+      valid && self.is_king(from_mask),
       (self.king & !from_mask) | to_mask,
       self.king,
     );
