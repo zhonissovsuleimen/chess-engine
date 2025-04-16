@@ -10,7 +10,7 @@ pub trait BoardMovement {
 impl BoardMovement for u64 {
   fn move_left_mask(self, amount: u32) -> u64 {
     let shift = amount & 7;
-    let byte_shift_mask = (0xFF >> shift) as u64;
+    let byte_shift_mask = (0xFF_u8 >> shift) as u64;
     let per_byte_mask = 0x0101010101010101u64.wrapping_mul(byte_shift_mask);
     let mask = mask_from_bool(amount < 8);
     (self >> shift) & (per_byte_mask & mask)
@@ -24,7 +24,7 @@ impl BoardMovement for u64 {
 
   fn move_right_mask(self, amount: u32) -> u64 {
     let shift = amount & 7;
-    let byte_shift_mask = (0xFF << shift) as u64;
+    let byte_shift_mask = (0xFF_u8 << shift) as u64;
     let per_byte_mask = 0x0101010101010101u64.wrapping_mul(byte_shift_mask);
     let mask = mask_from_bool(amount < 8);
     (self << shift) & per_byte_mask & mask
