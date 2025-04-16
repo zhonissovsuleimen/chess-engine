@@ -1,3 +1,4 @@
+//todo forced 3 fold repetition, insufficient material, simplified table, hashing, promoting lOl
 use super::{
   board_movement_trait::BoardMovement, move_generation_modifiers::*, pieces::Pieces, status::*,
   util_fns::*,
