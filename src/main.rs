@@ -138,15 +138,11 @@ fn create_sprites(
   asset_server: Res<AssetServer>,
   board: ResMut<Board>,
 ) {
-  // for sprite in sprites.iter() {
-  //   commands.entity(sprite).despawn();
-  // }
-
-  for i in 0..64 {
+  for (i, lookup) in CENTER_LOOKUP.into_iter().enumerate() {
     let at_mask = 1 << i;
 
     let transform = Transform {
-      translation: CENTER_LOOKUP[i],
+      translation: lookup,
       scale: Vec3::new(0.75, 0.75, 1.0),
       rotation: Quat::IDENTITY,
     };
@@ -240,13 +236,13 @@ fn update_moves_sprite(
       let piece_mask = 1 << piece.original_board_pos;
       let moves_mask = board.get_piece_moves(piece_mask);
 
-      for i in 0..64 {
+      for (i, lookup) in CENTER_LOOKUP.into_iter().enumerate() {
         if (moves_mask >> i) & 1 == 0 {
           continue;
         }
 
         let transform = Transform {
-          translation: CENTER_LOOKUP[i] + Vec3::new(0.0, 0.0, 0.1),
+          translation: lookup + Vec3::new(0.0, 0.0, 0.1),
           scale: Vec3::new(0.2, 0.2, 1.0),
           rotation: Quat::IDENTITY,
         };

@@ -206,7 +206,7 @@ impl Board {
     self.white_turn ^= move_mask > 0;
     self.update_masks();
     self.update_status();
-    return move_mask > 0;
+    move_mask > 0
   }
 
   fn initialize_masks(&mut self) {

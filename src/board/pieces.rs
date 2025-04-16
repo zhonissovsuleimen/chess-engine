@@ -42,41 +42,19 @@ impl Pieces {
 
 //auxilary
 impl Pieces {
-  pub fn pieces_as_array(&self) -> [&u64; 6] {
-    return [
-      &self.pawns,
-      &self.knights,
-      &self.bishops,
-      &self.rooks,
-      &self.queens,
-      &self.king,
-    ];
-  }
-
   pub fn pieces_as_mut_array(&mut self) -> [&mut u64; 6] {
-    return [
+    [
       &mut self.pawns,
       &mut self.knights,
       &mut self.bishops,
       &mut self.rooks,
       &mut self.queens,
       &mut self.king,
-    ];
+    ]
   }
 
   pub fn pieces_concat(&self) -> u64 {
-    return self.pawns | self.knights | self.bishops | self.rooks | self.queens | self.king;
-  }
-
-  pub fn get_value(&self) -> i32 {
-    let mut total = 0;
-    let lookup = [1, 3, 3, 5, 9, 1000];
-
-    for (i, piece) in self.pieces_as_array().iter().enumerate() {
-      total += lookup[i] * piece.count_zeros();
-    }
-
-    total as i32
+    self.pawns | self.knights | self.bishops | self.rooks | self.queens | self.king
   }
 }
 
@@ -124,30 +102,26 @@ impl Pieces {
     }
   }
 
-  pub fn is_empty(&self, at_mask: u64) -> bool {
-    self.pieces_concat() & at_mask == 0
-  }
-
   pub fn is_pawn(&self, at_mask: u64) -> bool {
-    return self.pawns & at_mask > 0;
+    self.pawns & at_mask > 0
   }
 
   pub fn is_knight(&self, at_mask: u64) -> bool {
-    return self.knights & at_mask > 0;
+    self.knights & at_mask > 0
   }
 
   pub fn is_bishop(&self, at_mask: u64) -> bool {
-    return self.bishops & at_mask > 0;
+    self.bishops & at_mask > 0
   }
 
   pub fn is_rook(&self, at_mask: u64) -> bool {
-    return self.rooks & at_mask > 0;
+    self.rooks & at_mask > 0
   }
   pub fn is_queen(&self, at_mask: u64) -> bool {
-    return self.queens & at_mask > 0;
+    self.queens & at_mask > 0
   }
 
   pub fn is_king(&self, at_mask: u64) -> bool {
-    return self.king & at_mask > 0;
+    self.king & at_mask > 0
   }
 }

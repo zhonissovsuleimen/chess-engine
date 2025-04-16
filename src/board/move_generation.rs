@@ -163,14 +163,14 @@ impl Board {
     for (dx, dy) in offsets {
       let mut new_move = if_bool(
         dx > 0,
-        at_mask.move_right_mask(dx.abs() as u32),
-        at_mask.move_left_mask(dx.abs() as u32),
+        at_mask.move_right_mask(dx.unsigned_abs()),
+        at_mask.move_left_mask(dx.unsigned_abs()),
       );
 
       new_move = if_bool(
         dy > 0,
-        new_move.move_up_mask(dy.abs() as u32),
-        new_move.move_down_mask(dy.abs() as u32),
+        new_move.move_up_mask(dy.unsigned_abs()),
+        new_move.move_down_mask(dy.unsigned_abs()),
       );
 
       moves |= new_move & (self.empty | enemy_mask);
@@ -189,13 +189,13 @@ impl Board {
     loop {
       let mut new_move = if_bool(
         dx > 0,
-        at_mask.move_right_mask(current.0.abs() as u32),
-        at_mask.move_left_mask(current.0.abs() as u32),
+        at_mask.move_right_mask(current.0.unsigned_abs()),
+        at_mask.move_left_mask(current.0.unsigned_abs()),
       );
       new_move = if_bool(
         dy > 0,
-        new_move.move_up_mask(current.1.abs() as u32),
-        new_move.move_down_mask(current.1.abs() as u32),
+        new_move.move_up_mask(current.1.unsigned_abs()),
+        new_move.move_down_mask(current.1.unsigned_abs()),
       );
 
       current = (current.0 + dx, current.1 + dy);
@@ -233,13 +233,13 @@ impl Board {
     loop {
       let mut new_move = if_bool(
         dx > 0,
-        at_mask.move_right_mask(current.0.abs() as u32),
-        at_mask.move_left_mask(current.0.abs() as u32),
+        at_mask.move_right_mask(current.0.unsigned_abs()),
+        at_mask.move_left_mask(current.0.unsigned_abs()),
       );
       new_move = if_bool(
         dy > 0,
-        new_move.move_up_mask(current.1.abs() as u32),
-        new_move.move_down_mask(current.1.abs() as u32),
+        new_move.move_up_mask(current.1.unsigned_abs()),
+        new_move.move_down_mask(current.1.unsigned_abs()),
       );
 
       current = (current.0 + dx, current.1 + dy);
