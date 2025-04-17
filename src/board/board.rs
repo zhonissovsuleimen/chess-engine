@@ -19,7 +19,7 @@ pub struct Board {
   pub(super) ally: u64,
   pub(super) enemy: u64,
   pub(super) empty: u64,
-  pub(super) under_attack: u64,
+  pub(super) king_danger: u64,
   pub(super) ally_king: u64,
 
   //should be initialized and updated during move_piece
@@ -55,7 +55,7 @@ impl Board {
       ally: 0,
       enemy: 0,
       empty: 0,
-      under_attack: 0,
+      king_danger: 0,
       ally_king: 0,
 
       advance_mask: 0,
@@ -232,23 +232,23 @@ impl Board {
     self.empty = !(self.ally | self.enemy);
     self.ally_king = if_mask(self.white_turn_mask, self.white.king, self.black.king);
 
-    self.under_attack = self
+    self.king_danger = self
       .gen_pawn_capturing_moves(self.pawns() & self.enemy, ALLY_IS_ENEMY | EMPTY_IS_ENEMY)
       | self.gen_knight_moves(self.knights() & self.enemy, ALLY_IS_ENEMY)
-      | self.gen_bishop_moves(self.bishops() & self.enemy, ALLY_IS_ENEMY)
-      | self.gen_rook_moves(self.rooks() & self.enemy, ALLY_IS_ENEMY)
-      | self.gen_queen_moves(self.queens() & self.enemy, ALLY_IS_ENEMY)
+      | self.gen_bishop_moves(self.bishops() & self.enemy, ALLY_IS_ENEMY | KING_IS_EMPTY)
+      | self.gen_rook_moves(self.rooks() & self.enemy, ALLY_IS_ENEMY | KING_IS_EMPTY)
+      | self.gen_queen_moves(self.queens() & self.enemy, ALLY_IS_ENEMY | KING_IS_EMPTY)
       | self.gen_king_default_moves(self.kings() & self.enemy, ALLY_IS_ENEMY);
   }
 
   fn update_status(&mut self) {
-    let checked = self.under_attack & self.ally_king > 0;
+    let checked = self.king_danger & self.ally_king > 0;
     let no_moves = self.get_piece_moves(self.ally) == 0;
 
     let winner = if_mask(self.white_turn_mask, BLACK_WON, WHITE_WON);
 
-    let checkmate = mask_from_bool(checked & no_moves);
-    let stalemate = mask_from_bool(!checked & no_moves);
+    let checkmate = mask_from_bool(checked && no_moves);
+    let stalemate = mask_from_bool(!checked && no_moves);
     let fifty_move = mask_from_bool(self.half_clock > 100);
 
     self.status = (checkmate & winner) | (fifty_move | stalemate & DRAW);
@@ -353,7 +353,7 @@ impl Board {
     let rook_moves = self.gen_rook_moves(at_mask & self.rooks(), NONE);
     let queen_moves = self.gen_queen_moves(at_mask & self.queens(), NONE);
     let king_default_move =
-      self.gen_king_default_moves(at_mask & self.kings(), NONE) & !self.under_attack;
+      self.gen_king_default_moves(at_mask & self.kings(), NONE) & !self.king_danger;
     let king_long_castle = self.gen_king_long_castle_moves(at_mask & self.kings());
     let king_short_castle = self.gen_king_short_castle_moves(at_mask & self.kings());
     let king_moves = king_default_move | king_long_castle | king_short_castle;
