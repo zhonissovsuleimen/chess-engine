@@ -1,4 +1,4 @@
-//todo forced 3 fold repetition, insufficient material, simplified table, hashing, promoting lOl
+//toVdo forced 3 fold repetition, simplified table, hashing, promoting lOl
 use super::{
   board_movement_trait::BoardMovement, move_generation_modifiers::*, pieces::Pieces, status::*,
   util_fns::*,
@@ -251,13 +251,35 @@ impl Board {
     let stalemate = mask_from_bool(!checked && no_moves);
     let fifty_move = mask_from_bool(self.half_clock > 100);
 
-    self.status = (checkmate & winner) | (fifty_move | stalemate & DRAW);
+    let king_vs_king = self.white.only_king() && self.black.only_king();
+    let king_bishop_vs_king = (self.white.only_king_and_bishop() && self.black.only_king())
+      || (self.white.only_king() && self.black.only_king_and_bishop());
+    let king_knight_vs_king = (self.white.only_king_and_knight() && self.black.only_king())
+      || (self.white.only_king() && self.black.only_king_and_knight());
+
+    let mut king_bishop_vs_king_bishop =
+      self.white.only_king_and_bishop() && self.black.only_king_and_bishop();
+
+    let same_color =
+      self.white.bishops.trailing_zeros() % 2 == self.black.bishops.trailing_zeros() % 2;
+    king_bishop_vs_king_bishop &= same_color;
+
+    let insufficient_material = mask_from_bool(
+      king_vs_king || king_bishop_vs_king | king_knight_vs_king || king_bishop_vs_king_bishop,
+    );
+
+    self.status = (checkmate & winner) | (insufficient_material | fifty_move | stalemate & DRAW);
   }
 
   fn update_clocks(&mut self, from_mask: u64, move_mask: u64) {
-    let pawn_moved = move_mask & self.gen_pawn_default_move(from_mask) > 0 || self.en_passant_mask > 0;
+    let pawn_moved =
+      move_mask & self.gen_pawn_default_move(from_mask) > 0 || self.en_passant_mask > 0;
     let capture_or_pawn = mask_from_bool(pawn_moved || move_mask & self.enemy > 0);
-    self.half_clock = if_bool(move_mask > 0, !capture_or_pawn & (self.half_clock + 1), self.half_clock);
+    self.half_clock = if_bool(
+      move_mask > 0,
+      !capture_or_pawn & (self.half_clock + 1),
+      self.half_clock,
+    );
 
     self.clock += (move_mask > 0 && !self.white_turn) as u64;
   }
@@ -301,11 +323,11 @@ impl Board {
 
     let rook_from = long_castled.move_left_mask(2) | short_castled.move_right_mask(1);
     let rook_to = long_castled.move_right_mask(1) | short_castled.move_left_mask(1);
-    
+
     self.white.move_piece(rook_from, rook_to);
     self.black.move_piece(rook_from, rook_to);
 
-    let castled =  mask_from_bool(long_castled | short_castled > 0);
+    let castled = mask_from_bool(long_castled | short_castled > 0);
     self.castling_mask &= !(castled & from_mask);
   }
 
