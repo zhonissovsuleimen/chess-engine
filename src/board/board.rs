@@ -307,14 +307,25 @@ impl Board {
 #[cfg(test)]
 mod tests {
   mod constructors {
-    use crate::{board::status::PLAYING, *};
+    use crate::board::{status::PLAYING, Board};
 
     #[test]
     fn default() {
       let board = Board::default();
 
-      assert_eq!(board.white.pieces_concat(), 0xFF_FF_00_00_00_00_00_00);
-      assert_eq!(board.black.pieces_concat(), 0xFF_FF);
+      assert_eq!(board.white.pawns, 0x00_FF_00_00_00_00_00_00);
+      assert_eq!(board.white.knights, 0x42_00_00_00_00_00_00_00);
+      assert_eq!(board.white.bishops, 0x24_00_00_00_00_00_00_00);
+      assert_eq!(board.white.rooks, 0x81_00_00_00_00_00_00_00);
+      assert_eq!(board.white.queens, 0x10_00_00_00_00_00_00_00);
+      assert_eq!(board.white.king, 0x08_00_00_00_00_00_00_00);
+      assert_eq!(board.black.pawns, 0x00_00_00_00_00_00_FF_00);
+      assert_eq!(board.black.knights, 0x00_00_00_00_00_00_00_42);
+      assert_eq!(board.black.bishops, 0x00_00_00_00_00_00_00_24);
+      assert_eq!(board.black.rooks, 0x00_00_00_00_00_00_00_81);
+      assert_eq!(board.black.queens, 0x00_00_00_00_00_00_00_10);
+      assert_eq!(board.black.king, 0x00_00_00_00_00_00_00_08);
+
       assert_eq!(board.white_turn, true);
       assert_eq!(board.status, PLAYING);
       assert_eq!(board.clock, 1);
@@ -351,6 +362,57 @@ mod tests {
       assert_eq!(a.advance_mask, b.advance_mask);
       assert_eq!(a.en_passant_mask, b.en_passant_mask);
       assert_eq!(a.castling_mask, b.castling_mask);
+    }
+  }
+
+  mod clock {
+    use crate::board::Board;
+
+    #[test]
+    fn full_clock() {
+      let mut board = Board::default();
+      assert_eq!(board.clock, 1);
+
+      assert_eq!(board.move_piece(52, 36), true);
+      assert_eq!(board.clock, 1);
+      assert_eq!(board.move_piece(12, 4), false);
+      assert_eq!(board.clock, 1);
+      assert_eq!(board.move_piece(12, 28), true);
+      assert_eq!(board.clock, 2);
+
+      assert_eq!(board.move_piece(61, 34), true);
+      assert_eq!(board.clock, 2);
+      assert_eq!(board.move_piece(56, 57), false);
+      assert_eq!(board.clock, 2);
+      assert_eq!(board.move_piece(1, 18), true);
+      assert_eq!(board.clock, 3);
+    }
+
+    #[test]
+    fn half_clock() {
+      let mut board = Board::default();
+      assert_eq!(board.half_clock, 0);
+
+      assert_eq!(board.move_piece(52, 36), true);
+      assert_eq!(board.half_clock, 0);
+      assert_eq!(board.move_piece(12, 4), false);
+      assert_eq!(board.half_clock, 0);
+      assert_eq!(board.move_piece(12, 28), true);
+      assert_eq!(board.half_clock, 0);
+
+      assert_eq!(board.move_piece(61, 34), true);
+      assert_eq!(board.half_clock, 1);
+      assert_eq!(board.move_piece(56, 57), false);
+      assert_eq!(board.half_clock, 1);
+      assert_eq!(board.move_piece(1, 18), true);
+      assert_eq!(board.half_clock, 2);
+
+      assert_eq!(board.move_piece(34, 20), true);
+      assert_eq!(board.half_clock, 3);
+      assert_eq!(board.move_piece(55, 47), false);
+      assert_eq!(board.half_clock, 3);
+      assert_eq!(board.move_piece(4, 20), true);
+      assert_eq!(board.half_clock, 0);
     }
   }
 }
