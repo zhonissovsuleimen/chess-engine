@@ -1,4 +1,4 @@
-//toVdo forced 3 fold repetition, simplified table, hashing, promoting lOl
+//todo: forced 3 fold repetition, simplified table, hashing, promoting lOl
 use super::{
   board_movement_trait::BoardMovement, move_generation_modifiers::*, pieces::Pieces, status::*,
   util_fns::*,

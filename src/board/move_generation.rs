@@ -44,7 +44,7 @@ impl Board {
     empty |= mask_from_bool(king_is_empty(modifier)) & self.ally_king;
 
     let mut enemy = self.enemy;
-    enemy |= mask_from_bool(empty_is_enemy(modifier)) & self.empty;
+    enemy |= mask_from_bool(empty_is_enemy(modifier)) & empty;
     enemy |= mask_from_bool(ally_is_enemy(modifier)) & self.ally;
     enemy &= !(mask_from_bool(king_is_empty(modifier)) & self.ally_king);
 
@@ -169,7 +169,7 @@ impl Board {
     empty |= mask_from_bool(king_is_empty(modifier)) & self.ally_king;
 
     let mut enemy = self.enemy;
-    enemy |= mask_from_bool(empty_is_enemy(modifier)) & self.empty;
+    enemy |= mask_from_bool(empty_is_enemy(modifier)) & empty;
     enemy |= mask_from_bool(ally_is_enemy(modifier)) & self.ally;
     enemy &= !(mask_from_bool(king_is_empty(modifier)) & self.ally_king);
 
@@ -199,7 +199,7 @@ impl Board {
     empty |= mask_from_bool(king_is_empty(modifier)) & self.ally_king;
 
     let mut enemy = self.enemy;
-    enemy |= mask_from_bool(empty_is_enemy(modifier)) & self.empty;
+    enemy |= mask_from_bool(empty_is_enemy(modifier)) & empty;
     enemy |= mask_from_bool(ally_is_enemy(modifier)) & self.ally;
     enemy &= !(mask_from_bool(king_is_empty(modifier)) & self.ally_king);
 
