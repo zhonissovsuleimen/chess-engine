@@ -173,12 +173,13 @@ impl Board {
 //moving/updating
 impl Board {
   pub fn move_piece(&mut self, from_id: usize, to_id: usize) -> bool {
-    let playing = self.status == PLAYING;
-    let from_mask: u64 = if_bool(playing && from_id < 64, 1 << from_id, 0);
-    let to_mask: u64 = if_bool(playing && to_id < 64, 1 << to_id, 0);
+    let from_mask: u64 = if_bool(from_id < 64, 1 << from_id, 0);
+    let to_mask: u64 = if_bool(to_id < 64, 1 << to_id, 0);
     self.moves = MoveGen::cached(&self, from_mask);
-
-    let move_mask = to_mask & self.moves.all();
+    self.update_status();
+    let playing = mask_from_bool(self.status == PLAYING);
+    
+    let move_mask = to_mask & self.moves.all() & playing;
 
     //order matters
     self.handle_en_passant(move_mask);
@@ -188,7 +189,6 @@ impl Board {
 
     self.update_clocks(move_mask);
     self.white_turn ^= move_mask > 0;
-    self.update_status();
     move_mask > 0
   }
 
