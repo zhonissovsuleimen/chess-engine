@@ -1,7 +1,6 @@
 use super::util_fns::if_bool;
 
-// rank 8 file a is bit 0, rank 1 file h is bit 63
-#[derive(Default)]
+// rank 8 file h is bit 0, rank 1 file a is bit 63 (so top to bottom, right to left)
 pub struct Pieces {
   pub pawns: u64,
   pub knights: u64,
@@ -14,28 +13,35 @@ pub struct Pieces {
 //constructors
 impl Pieces {
   pub fn empty() -> Pieces {
-    Pieces::default()
+    Pieces {
+      pawns: 0,
+      knights: 0,
+      bishops: 0,
+      rooks: 0,
+      queens: 0,
+      king: 0,
+    }
   }
 
   pub fn white() -> Pieces {
     Pieces {
-      pawns: 71776119061217280,
-      knights: 4755801206503243776,
-      bishops: 2594073385365405696,
-      rooks: 9295429630892703744,
-      queens: 576460752303423488,
-      king: 1152921504606846976,
+      pawns: 0x00_FF_00_00_00_00_00_00,
+      knights: 0x42_00_00_00_00_00_00_00,
+      bishops: 0x24_00_00_00_00_00_00_00,
+      rooks: 0x81_00_00_00_00_00_00_00,
+      queens: 0x10_00_00_00_00_00_00_00,
+      king: 0x08_00_00_00_00_00_00_00,
     }
   }
 
   pub fn black() -> Pieces {
     Pieces {
-      pawns: 65280,
-      knights: 66,
-      bishops: 36,
-      rooks: 129,
-      queens: 8,
-      king: 16,
+      pawns: 0xFF_00,
+      knights: 0x42,
+      bishops: 0x24,
+      rooks: 0x81,
+      queens: 0x10,
+      king: 0x08,
     }
   }
 }
@@ -137,5 +143,73 @@ impl Pieces {
   pub fn only_king_and_knight(&self) -> bool {
     let one_knight = self.knights.count_ones() == 1;
     one_knight && (self.pieces_concat() == self.king | self.knights)
+  }
+}
+
+
+#[cfg(test)]
+mod tests {
+  mod movement {
+    use crate::board::pieces::Pieces;
+
+    #[test]
+    fn valid_move() {
+      let mut pieces = Pieces::white();
+      let from = 0x00_80_00_00_00_00_00_00;
+      let to = 0x00_00_80_00_00_00_00_00;
+      pieces.move_piece(from, to);
+      assert_eq!(pieces.pawns, 0x00_7F_80_00_00_00_00_00);
+      assert_eq!(pieces.pieces_concat(), 0xFF_7F_80_00_00_00_00_00);
+    }
+
+    #[test]
+    fn zero_from() {
+      let mut pieces = Pieces::white();
+      let from = 0;
+      let to = 0x00_00_80_00_00_00_00_00;
+      pieces.move_piece(from, to);
+      assert_eq!(pieces.pawns, 0x00_FF_00_00_00_00_00_00);
+      assert_eq!(pieces.pieces_concat(), 0xFF_FF_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn empty_from() {
+      let mut pieces = Pieces::white();
+      let from = 1;
+      let to = 0x00_00_80_00_00_00_00_00;
+      pieces.move_piece(from, to);
+      assert_eq!(pieces.pawns, 0x00_FF_00_00_00_00_00_00);
+      assert_eq!(pieces.pieces_concat(), 0xFF_FF_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn zero_to() {
+      let mut pieces = Pieces::white();
+      let from = 0x00_80_00_00_00_00_00_00;
+      let to = 0;
+      pieces.move_piece(from, to);
+      assert_eq!(pieces.pawns, 0x00_FF_00_00_00_00_00_00);
+      assert_eq!(pieces.pieces_concat(), 0xFF_FF_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn occupied_to() {
+      let mut pieces = Pieces::white();
+      let from = 0x00_80_00_00_00_00_00_00;
+      let to = 0x80_00_00_00_00_00_00_00;
+      pieces.move_piece(from, to);
+      assert_eq!(pieces.pawns, 0x00_FF_00_00_00_00_00_00);
+      assert_eq!(pieces.pieces_concat(), 0xFF_FF_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn from_eq_to() {
+      let mut pieces = Pieces::white();
+      let from = 0x00_80_00_00_00_00_00_00;
+      let to = 0x00_80_00_00_00_00_00_00;
+      pieces.move_piece(from, to);
+      assert_eq!(pieces.pawns, 0x00_FF_00_00_00_00_00_00);
+      assert_eq!(pieces.pieces_concat(), 0xFF_FF_00_00_00_00_00_00);
+    }
   }
 }
