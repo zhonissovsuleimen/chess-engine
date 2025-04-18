@@ -62,8 +62,8 @@ impl Board {
     for c in pieces.chars() {
       let mut increment_file = true;
 
-      let bit_shift = (7 - rank) * 8 + file;
-      let pos = 1 << bit_shift;
+      // let id = (7 - rank) * 8 + file;
+      let pos = 0x80_u64.move_right_mask(file).move_down_mask(7 - rank);
       match c {
         'P' => board.white.pawns |= pos,
         'N' => board.white.knights |= pos,
@@ -119,10 +119,10 @@ impl Board {
 
       for c in chars {
         match c {
-          'K' => board.castling_mask |= 0x90_00_00_00_00_00_00_00,
-          'Q' => board.castling_mask |= 0x11_00_00_00_00_00_00_00,
-          'k' => board.castling_mask |= 0x00_00_00_00_00_00_00_90,
-          'q' => board.castling_mask |= 0x00_00_00_00_00_00_00_11,
+          'K' => board.castling_mask |= 0x09_00_00_00_00_00_00_00,
+          'Q' => board.castling_mask |= 0x88_00_00_00_00_00_00_00,
+          'k' => board.castling_mask |= 0x00_00_00_00_00_00_00_09,
+          'q' => board.castling_mask |= 0x00_00_00_00_00_00_00_88,
           wrong_char => {
             panic!("Unexpected character ({wrong_char}) in castling rights data")
           }
@@ -299,8 +299,8 @@ impl Board {
   }
 
   pub(crate) fn get_piece_moves(&self, at_mask: u64) -> u64 {
-    // let moves = MoveGen::cached(&self, at_mask);
-    self.moves.all()
+    let moves = MoveGen::cached(&self, at_mask);
+    moves.all()
   }
 }
 
@@ -323,6 +323,34 @@ mod tests {
       assert_eq!(board.advance_mask, 0x00_FF_00_00_00_00_FF_00);
       assert_eq!(board.en_passant_mask, 0x00_00_00_00_00_00_00_00);
       assert_eq!(board.castling_mask, 0x89_00_00_00_00_00_00_89);
+    }
+
+    #[test]
+    fn fen_default() {
+      let a = Board::default();
+      let b = Board::from_fen(r"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+      assert_eq!(a.white.pawns, b.white.pawns);
+      assert_eq!(a.white.knights, b.white.knights);
+      assert_eq!(a.white.bishops, b.white.bishops);
+      assert_eq!(a.white.rooks, b.white.rooks);
+      assert_eq!(a.white.queens, b.white.queens);
+      assert_eq!(a.white.king, b.white.king);
+      assert_eq!(a.black.pawns, b.black.pawns);
+      assert_eq!(a.black.knights, b.black.knights);
+      assert_eq!(a.black.bishops, b.black.bishops);
+      assert_eq!(a.black.rooks, b.black.rooks);
+      assert_eq!(a.black.queens, b.black.queens);
+      assert_eq!(a.black.king, b.black.king);
+
+      assert_eq!(a.white_turn, b.white_turn);
+      assert_eq!(a.status, b.status);
+      assert_eq!(a.clock, b.clock);
+      assert_eq!(a.half_clock, b.half_clock);
+
+      assert_eq!(a.advance_mask, b.advance_mask);
+      assert_eq!(a.en_passant_mask, b.en_passant_mask);
+      assert_eq!(a.castling_mask, b.castling_mask);
     }
   }
 }
