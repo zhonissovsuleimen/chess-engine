@@ -130,20 +130,6 @@ impl Pieces {
   pub fn is_king(&self, at_mask: u64) -> bool {
     self.king & at_mask > 0
   }
-
-  pub fn only_king(&self) -> bool {
-    self.pieces_concat() == self.king
-  }
-
-  pub fn only_king_and_bishop(&self) -> bool {
-    let one_bishop = self.bishops.count_ones() == 1;
-    one_bishop && (self.pieces_concat() == self.king | self.bishops)
-  }
-
-  pub fn only_king_and_knight(&self) -> bool {
-    let one_knight = self.knights.count_ones() == 1;
-    one_knight && (self.pieces_concat() == self.king | self.knights)
-  }
 }
 
 
