@@ -4,11 +4,16 @@ use super::{
   Board, board_movement_trait::BoardMovement, cached_piece_moves::CachedPieceMoves, status::*,
   util_fns::*,
 };
+
 pub struct MoveGen {
-  orig_white_turn_mask: u64,
-  orig_ally: u64,
-  orig_enemy: u64,
-  orig_empty: u64,
+  default_white_turn_mask: u64,
+  default_ally: u64,
+  default_enemy: u64,
+  default_empty: u64,
+  saved_white_turn_mask: u64,
+  saved_ally: u64,
+  saved_enemy: u64,
+  saved_empty: u64,
 
   white_turn_mask: u64,
   ally: u64,
@@ -44,10 +49,14 @@ impl MoveGen {
     let empty = !(ally | enemy);
 
     let mut movegen = MoveGen {
-      orig_white_turn_mask: white_turn_mask,
-      orig_ally: ally,
-      orig_enemy: enemy,
-      orig_empty: empty,
+      default_white_turn_mask: white_turn_mask,
+      default_ally: ally,
+      default_enemy: enemy,
+      default_empty: empty,
+      saved_white_turn_mask: white_turn_mask,
+      saved_ally: ally,
+      saved_enemy: enemy,
+      saved_empty: empty,
 
       white_turn_mask: white_turn_mask,
       ally: ally,
@@ -66,7 +75,7 @@ impl MoveGen {
       king_danger: 0,
     };
 
-    movegen.swap_pov();
+    movegen.switch_turn();
     movegen.skip_enemy_king();
     movegen.ally_is_enemy();
     movegen.king_danger = movegen.knight(movegen.knights & movegen.enemy)
@@ -76,9 +85,10 @@ impl MoveGen {
       | movegen.king_default(movegen.kings & movegen.enemy);
     movegen.reset();
 
-    movegen.swap_pov();
+    movegen.switch_turn();
     movegen.empty_is_enemy();
     movegen.king_danger |= movegen.pawn_capturing(movegen.pawns & movegen.enemy);
+    movegen.reset();
     movegen
   }
 
@@ -329,16 +339,17 @@ impl MoveGen {
     for (dx, dy, diag_mask) in directions {
       let pinner = if_mask(diag_mask, diag, not_diag);
 
+      self.save();
       self.ally_is_enemy();
       let king_to_pin_path = self.iterative(ally_king, dx, dy);
       let king_hits_pin = king_to_pin_path & at_mask > 0;
 
-      self.reset();
-      let pin_to_pinner_path = self.iterative(at_mask, dx, dy) | pinner;
+      self.load();
+      let pin_to_pinner_path = self.iterative(at_mask, dx, dy);
       let pin_hits_pinner = pin_to_pinner_path & pinner > 0;
 
-      let pinned = mask_from_bool(king_hits_pin & pin_hits_pinner);
-      pin_path = pinned & (king_to_pin_path | pin_to_pinner_path);
+      let pinned = mask_from_bool(king_hits_pin && pin_hits_pinner);
+      pin_path |= pinned & (king_to_pin_path | pin_to_pinner_path | pinner) & !at_mask;
     }
 
     //king not under attack? kinda discovered pin and king attack
@@ -382,7 +393,7 @@ impl MoveGen {
 
 //other
 impl MoveGen {
-  fn swap_pov(&mut self) {
+  fn switch_turn(&mut self) {
     self.white_turn_mask = !self.white_turn_mask;
     mem::swap(&mut self.ally, &mut self.enemy);
   }
@@ -402,11 +413,25 @@ impl MoveGen {
     self.empty = !(self.ally | self.enemy)
   }
 
+  fn save(&mut self) {
+    self.saved_white_turn_mask = self.white_turn_mask;
+    self.saved_ally = self.ally;
+    self.saved_enemy = self.enemy;
+    self.saved_empty = self.empty;
+  }
+
+  fn load(&mut self) {
+    self.white_turn_mask = self.saved_white_turn_mask;
+    self.ally = self.saved_ally;
+    self.enemy = self.saved_enemy;
+    self.empty = self.saved_empty;
+  }
+
   fn reset(&mut self) {
-    self.white_turn_mask = self.orig_white_turn_mask;
-    self.ally = self.orig_ally;
-    self.enemy = self.orig_enemy;
-    self.empty = self.orig_empty;
+    self.white_turn_mask = self.default_white_turn_mask;
+    self.ally = self.default_ally;
+    self.enemy = self.default_enemy;
+    self.empty = self.default_empty;
   }
 
   pub(super) fn status(&self) -> u64 {
@@ -439,16 +464,185 @@ impl MoveGen {
     let king_minor_vs_king = (self.ally | self.enemy) == (self.kings | self.knights | self.bishops)
       && (ally_bishop_count + ally_knight_count + enemy_bishop_count + enemy_knight_count == 1);
 
-    let same_square_color =
-      (self.bishops & self.ally).trailing_zeros() % 2 == (self.bishops & self.enemy).trailing_zeros() % 2;
+    let same_square_color = (self.bishops & self.ally).trailing_zeros() % 2
+      == (self.bishops & self.enemy).trailing_zeros() % 2;
 
     let king_bishop_vs_king_bishop = (self.ally | self.enemy) == (self.kings | self.bishops)
-      && (ally_bishop_count == 1 && enemy_bishop_count == 1) && same_square_color;
+      && (ally_bishop_count == 1 && enemy_bishop_count == 1)
+      && same_square_color;
 
-    let insufficient_material = mask_from_bool(
-      king_vs_king || king_minor_vs_king | king_bishop_vs_king_bishop
-    );
+    let insufficient_material =
+      mask_from_bool(king_vs_king || king_minor_vs_king | king_bishop_vs_king_bishop);
 
     (checkmate & winner) | (insufficient_material | stalemate & DRAW)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  mod pawn {
+    use crate::board::{Board, move_gen::MoveGen};
+
+    #[test]
+    fn default() {
+      let board = Board::from_fen("k7/p7/8/8/8/8/P7/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(
+        movegen.pawn_default(0x_00_80_00_00_00_00_00_00),
+        0x_00_00_80_00_00_00_00_00
+      );
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_default(0x_00_00_00_00_00_00_80_00),
+        0x_00_00_00_00_00_80_00_00
+      );
+    }
+
+    #[test]
+    fn default_blocked() {
+      let board = Board::from_fen("k7/p7/P7/8/8/p7/P7/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(movegen.pawn_default(0x_00_80_00_00_00_00_00_00), 0);
+      movegen.switch_turn();
+      assert_eq!(movegen.pawn_default(0x_00_00_00_00_00_00_80_00), 0);
+    }
+
+    #[test]
+    fn advance() {
+      let board = Board::from_fen("k7/p7/8/8/8/8/P7/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(
+        movegen.pawn_advance(0x_00_80_00_00_00_00_00_00),
+        0x_00_00_00_80_00_00_00_00
+      );
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_advance(0x_00_00_00_00_00_00_80_00),
+        0x_00_00_00_00_80_00_00_00
+      );
+    }
+
+    #[test]
+    fn advance_blocked() {
+      let board = Board::from_fen("k7/p7/P7/8/8/p7/P7/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(movegen.pawn_advance(0x_00_80_00_00_00_00_00_00), 0);
+      movegen.switch_turn();
+      assert_eq!(movegen.pawn_advance(0x_00_00_00_00_00_00_80_00), 0);
+    }
+
+    #[test]
+    fn advance_already_advanced() {
+      let board = Board::from_fen("k7/8/p7/8/8/P7/p/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(movegen.pawn_advance(0x_00_80_00_00_00_00_00_00), 0);
+      movegen.switch_turn();
+      assert_eq!(movegen.pawn_advance(0x_00_00_00_00_00_00_80_00), 0);
+    }
+
+    #[test]
+    fn capturing() {
+      let board = Board::from_fen("k7/1p6/P1P6/8/8/p1p6/1P6/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(
+        movegen.pawn_capturing(0x_00_40_00_00_00_00_00_00),
+        0x_00_00_A0_00_00_00_00_00
+      );
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_capturing(0x_00_00_00_00_00_00_40_00),
+        0x_00_00_00_00_00_A0_00_00
+      );
+    }
+
+    #[test]
+    fn pinned_vert() {
+      let board = Board::from_fen("r6k/7p/6P1/8/8/1p6/P7/K6R w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let white_pawn = 0x00_80_00_00_00_00_00_00;
+      let filter = movegen.pin_filter(white_pawn);
+
+      assert_eq!(filter, 0x00_00_80_80_80_80_80_80);
+      assert_eq!(
+        movegen.pawn_default(white_pawn) & filter,
+        0x00_00_80_00_00_00_00_00
+      );
+      assert_eq!(
+        movegen.pawn_advance(white_pawn) & filter,
+        0x00_00_00_80_00_00_00_00
+      );
+      assert_eq!(movegen.pawn_capturing(white_pawn) & filter, 0);
+
+      movegen.switch_turn();
+
+      let black_pawn = 0x00_00_00_00_00_00_01_00;
+      let filter = movegen.pin_filter(black_pawn);
+
+      assert_eq!(filter, 0x01_01_01_01_01_01_00_00);
+      assert_eq!(
+        movegen.pawn_default(black_pawn) & filter,
+        0x00_00_00_00_00_01_00_00
+      );
+      assert_eq!(
+        movegen.pawn_advance(black_pawn) & filter,
+        0x00_00_00_00_01_00_00_00
+      );
+      assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+    }
+
+    #[test]
+    fn pinned_hor() {
+      let board = Board::from_fen("kp5R/P7/8/8/8/8/p7/KP5r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let white_pawn = 0x40_00_00_00_00_00_00_00;
+      let filter = movegen.pin_filter(white_pawn);
+
+      assert_eq!(filter, 0x3F_00_00_00_00_00_00_00);
+      assert_eq!(movegen.pawn_default(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_advance(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capturing(white_pawn) & filter, 0);
+
+      movegen.switch_turn();
+
+      let black_pawn = 0x00_00_00_00_00_00_00_40;
+      let filter = movegen.pin_filter(black_pawn);
+
+      assert_eq!(filter, 0x00_00_00_00_00_00_00_3F);
+      assert_eq!(movegen.pawn_default(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_advance(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+    }
+
+    #[test]
+    fn pinned_diag() {
+      let board = Board::from_fen("k6b/1p6/P7/8/8/p7/1P6/K6B w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let white_pawn = 0x00_40_00_00_00_00_00_00;
+      let filter = movegen.pin_filter(white_pawn);
+
+      assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
+      assert_eq!(movegen.pawn_default(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_advance(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capturing(white_pawn) & filter, 0);
+
+      movegen.switch_turn();
+
+      let black_pawn = 0x00_00_00_00_00_00_40_00;
+      let filter = movegen.pin_filter(black_pawn);
+
+      assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
+      assert_eq!(movegen.pawn_default(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_advance(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+    }
   }
 }
