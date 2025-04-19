@@ -489,13 +489,13 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(
-        movegen.pawn_default(0x_00_80_00_00_00_00_00_00),
-        0x_00_00_80_00_00_00_00_00
+        movegen.pawn_default(0x00_80_00_00_00_00_00_00),
+        0x00_00_80_00_00_00_00_00
       );
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_default(0x_00_00_00_00_00_00_80_00),
-        0x_00_00_00_00_00_80_00_00
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_00_80_00_00
       );
     }
 
@@ -504,9 +504,9 @@ mod tests {
       let board = Board::from_fen("k7/p7/P7/8/8/p7/P7/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      assert_eq!(movegen.pawn_default(0x_00_80_00_00_00_00_00_00), 0);
+      assert_eq!(movegen.pawn_default(0x00_80_00_00_00_00_00_00), 0);
       movegen.switch_turn();
-      assert_eq!(movegen.pawn_default(0x_00_00_00_00_00_00_80_00), 0);
+      assert_eq!(movegen.pawn_default(0x00_00_00_00_00_00_80_00), 0);
     }
 
     #[test]
@@ -515,13 +515,13 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(
-        movegen.pawn_advance(0x_00_80_00_00_00_00_00_00),
-        0x_00_00_00_80_00_00_00_00
+        movegen.pawn_advance(0x00_80_00_00_00_00_00_00),
+        0x00_00_00_80_00_00_00_00
       );
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_advance(0x_00_00_00_00_00_00_80_00),
-        0x_00_00_00_00_80_00_00_00
+        movegen.pawn_advance(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_80_00_00_00
       );
     }
 
@@ -530,9 +530,9 @@ mod tests {
       let board = Board::from_fen("k7/p7/P7/8/8/p7/P7/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      assert_eq!(movegen.pawn_advance(0x_00_80_00_00_00_00_00_00), 0);
+      assert_eq!(movegen.pawn_advance(0x00_80_00_00_00_00_00_00), 0);
       movegen.switch_turn();
-      assert_eq!(movegen.pawn_advance(0x_00_00_00_00_00_00_80_00), 0);
+      assert_eq!(movegen.pawn_advance(0x00_00_00_00_00_00_80_00), 0);
     }
 
     #[test]
@@ -540,9 +540,9 @@ mod tests {
       let board = Board::from_fen("k7/8/p7/8/8/P7/p/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      assert_eq!(movegen.pawn_advance(0x_00_80_00_00_00_00_00_00), 0);
+      assert_eq!(movegen.pawn_advance(0x00_80_00_00_00_00_00_00), 0);
       movegen.switch_turn();
-      assert_eq!(movegen.pawn_advance(0x_00_00_00_00_00_00_80_00), 0);
+      assert_eq!(movegen.pawn_advance(0x00_00_00_00_00_00_80_00), 0);
     }
 
     #[test]
@@ -551,13 +551,13 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(
-        movegen.pawn_capturing(0x_00_40_00_00_00_00_00_00),
-        0x_00_00_A0_00_00_00_00_00
+        movegen.pawn_capturing(0x00_40_00_00_00_00_00_00),
+        0x00_00_A0_00_00_00_00_00
       );
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_capturing(0x_00_00_00_00_00_00_40_00),
-        0x_00_00_00_00_00_A0_00_00
+        movegen.pawn_capturing(0x00_00_00_00_00_00_40_00),
+        0x00_00_00_00_00_A0_00_00
       );
     }
 
@@ -643,6 +643,98 @@ mod tests {
       assert_eq!(movegen.pawn_default(black_pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(black_pawn) & filter, 0);
       assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+    }
+  }
+
+  mod knight {
+    use crate::board::{Board, move_gen::MoveGen};
+
+    #[test]
+    fn default() {
+      let board = Board::from_fen("k7/8/8/3n4/4N4/8/8/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(
+        movegen.knight(0x00_00_00_10_00_00_00_00),
+        0x00_28_44_00_44_28_00_00
+      );
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.knight(0x00_00_00_00_10_00_00_00),
+        0x00_00_28_44_00_44_28_00
+      );
+    }
+
+    #[test]
+    fn default_on_edge() {
+      let board = Board::from_fen("N6k/8/8/8/8/8/8/K6n w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_knights = movegen.knights & movegen.ally;
+      assert_eq!(movegen.knight(ally_knights), 0x00_00_00_00_00_40_20_00);
+      movegen.switch_turn();
+      let ally_knights = movegen.knights & movegen.ally;
+      assert_eq!(movegen.knight(ally_knights), 0x00_04_02_00_00_00_00_00);
+    }
+
+    #[test]
+    fn pinned_vert() {
+      let board = Board::from_fen("r6k/7n/8/6P1/1p6/8/N7/K6R w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_knight = movegen.knights & movegen.ally;
+      let filter = movegen.pin_filter(ally_knight);
+
+      assert_eq!(filter, 0x00_00_80_80_80_80_80_80);
+      assert_eq!(movegen.knight(ally_knight) & filter, 0);
+
+      movegen.switch_turn();
+
+      let ally_knight = movegen.knights & movegen.ally;
+      let filter = movegen.pin_filter(ally_knight);
+
+      assert_eq!(filter, 0x01_01_01_01_01_01_00_00);
+      assert_eq!(movegen.knight(ally_knight) & filter, 0);
+    }
+
+    #[test]
+    fn pinned_hor() {
+      let board = Board::from_fen("kn5R/8/P7/8/8/p7/8/KN5r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_knight = movegen.knights & movegen.ally;
+      let filter = movegen.pin_filter(ally_knight);
+
+      assert_eq!(filter, 0x3F_00_00_00_00_00_00_00);
+      assert_eq!(movegen.knight(ally_knight) & filter, 0);
+
+      movegen.switch_turn();
+
+      let ally_knight = movegen.knights & movegen.ally;
+      let filter = movegen.pin_filter(ally_knight);
+
+      assert_eq!(filter, 0x00_00_00_00_00_00_00_3F);
+      assert_eq!(movegen.knight(ally_knight) & filter, 0);
+    }
+
+    #[test]
+    fn pinned_diag() {
+      let board = Board::from_fen("k6b/1n6/8/P7/p7/8/1N6/K6B w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_knight = movegen.knights & movegen.ally;
+      let filter = movegen.pin_filter(ally_knight);
+
+      assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
+      assert_eq!(movegen.knight(ally_knight) & filter, 0);
+
+      movegen.switch_turn();
+
+      let ally_knight = movegen.knights & movegen.ally;
+      let filter = movegen.pin_filter(ally_knight);
+
+      assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
+      assert_eq!(movegen.knight(ally_knight) & filter, 0);
     }
   }
 }
