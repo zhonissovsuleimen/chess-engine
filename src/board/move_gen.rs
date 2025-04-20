@@ -921,4 +921,111 @@ mod tests {
       assert_eq!(movegen.rook(ally_rook) & filter, 0);
     }
   }
+
+  mod queen {
+    use crate::board::{Board, move_gen::MoveGen};
+
+    #[test]
+    fn default() {
+      let board = Board::from_fen("k7/8/8/3q4/3Q4/8/8/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_queen = movegen.queens & movegen.ally;
+      assert_eq!(movegen.queen(ally_queen), 0x12_54_38_EF_38_44_82_01);
+
+      movegen.switch_turn();
+      let ally_queen = movegen.queens & movegen.ally;
+      assert_eq!(movegen.queen(ally_queen), 0x01_82_44_38_EF_38_54_12);
+    }
+
+    #[test]
+    fn default_on_edge() {
+      let board = Board::from_fen("kq6/8/8/8/8/8/8/KQ6 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_queen = movegen.queens & movegen.ally;
+      assert_eq!(movegen.queen(ally_queen), 0x3F_E0_50_48_44_42_41_40);
+      movegen.switch_turn();
+      let ally_queen = movegen.queens & movegen.ally;
+      assert_eq!(movegen.queen(ally_queen), 0x40_41_42_44_48_50_E0_3F);
+    }
+
+    #[test]
+    fn pinned_vert() {
+      let board = Board::from_fen("k6K/q6Q/8/8/8/8/8/R6r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_queen = movegen.queens & movegen.ally;
+      let filter = movegen.pin_filter(ally_queen);
+
+      assert_eq!(filter, 0x01_01_01_01_01_01_00_00);
+      assert_eq!(
+        movegen.queen(ally_queen) & filter,
+        0x01_01_01_01_01_01_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_queen = movegen.queens & movegen.ally;
+      let filter = movegen.pin_filter(ally_queen);
+
+      assert_eq!(filter, 0x80_80_80_80_80_80_00_00);
+      assert_eq!(
+        movegen.queen(ally_queen) & filter,
+        0x80_80_80_80_80_80_00_00
+      );
+    }
+
+    #[test]
+    fn pinned_hor() {
+      let board = Board::from_fen("kq5R/8/8/8/8/8/8/KQ5r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_queen = movegen.queens & movegen.ally;
+      let filter = movegen.pin_filter(ally_queen);
+
+      assert_eq!(filter, 0x3F_00_00_00_00_00_00_00);
+      assert_eq!(
+        movegen.queen(ally_queen) & filter,
+        0x3F_00_00_00_00_00_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_queen = movegen.queens & movegen.ally;
+      let filter = movegen.pin_filter(ally_queen);
+
+      assert_eq!(filter, 0x00_00_00_00_00_00_00_3F);
+      assert_eq!(
+        movegen.queen(ally_queen) & filter,
+        0x00_00_00_00_00_00_00_3F
+      );
+    }
+
+    #[test]
+    fn pinned_diag() {
+      let board = Board::from_fen("k6b/1q6/8/8/8/8/1Q6/K6B w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_queen = movegen.queens & movegen.ally;
+      let filter = movegen.pin_filter(ally_queen);
+
+      assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
+      assert_eq!(
+        movegen.queen(ally_queen) & filter,
+        0x00_00_20_10_08_04_02_01
+      );
+
+      movegen.switch_turn();
+
+      let ally_queen = movegen.queens & movegen.ally;
+      let filter = movegen.pin_filter(ally_queen);
+
+      assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
+      assert_eq!(
+        movegen.queen(ally_queen) & filter,
+        0x01_02_04_08_10_20_00_00
+      );
+    }
+  }
 }
