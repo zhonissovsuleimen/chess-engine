@@ -1,4 +1,4 @@
-//todo en passant test; castling test; status pin filter check needed? 
+//status pin filter check needed? 
 use std::mem;
 
 use super::{
@@ -391,7 +391,6 @@ impl MoveGen {
     king_danger |= self.knight(self.knights & self.ally);
     king_danger |= self.king_default(self.kings & self.ally);
 
-
     self.load();
     self.remove_enemy_king();
     king_danger |= self.bishop(self.bishops & self.ally);
@@ -570,6 +569,26 @@ mod tests {
       assert_eq!(
         movegen.pawn_capturing(0x00_00_00_00_00_00_40_00),
         0x00_00_00_00_00_A0_00_00
+      );
+    }
+
+    #[test]
+    fn en_passant() {
+      let mut board = Board::from_fen("k7/p7/8/1P6/1p6/8/P7/K7 w - - 0 1");
+      board.move_piece(55, 39);
+      let movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_capturing(0x00_00_00_40_00_00_00_00),
+        0x00_00_80_00_00_00_00_00
+      );
+
+
+      let mut board = Board::from_fen("k7/p7/8/1P6/1p6/8/P7/K7 b - - 0 1");
+      board.move_piece(15, 31);
+      let movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_capturing(0x00_00_00_00_40_00_00_00),
+        0x00_00_00_00_00_80_00_00
       );
     }
 
@@ -1225,7 +1244,6 @@ mod tests {
     }
   }
 
-
   mod king {
     use crate::board::{Board, move_gen::MoveGen};
 
@@ -1267,6 +1285,86 @@ mod tests {
         movegen.king_default(king) & !movegen.king_danger(),
         0x00_00_00_00_00_00_C0_40
       );
+    }
+
+    #[test]
+    fn castling() {
+      let board = Board::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0x20_00_00_00_00_00_00_00);
+      assert_eq!(movegen.king_short_castle(king), 0x02_00_00_00_00_00_00_00);
+
+      movegen.switch_turn();
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0x00_00_00_00_00_00_00_20);
+      assert_eq!(movegen.king_short_castle(king), 0x00_00_00_00_00_00_00_02);
+    }
+
+    #[test]
+    fn castling_no_rights() {
+      let board = Board::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+
+      movegen.switch_turn();
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+    }
+
+    #[test]
+    fn castling_from_check() {
+      let board = Board::from_fen("r3k2r/8/2B5/8/8/2b5/8/R3K2R w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+
+      movegen.switch_turn();
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+    }
+
+    #[test]
+    fn castling_to_check() {
+      let board = Board::from_fen("r3k2r/8/4B3/8/8/4b3/8/R3K2R w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+
+      movegen.switch_turn();
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+    }
+
+    #[test]
+    fn castling_through_check() {
+      let board = Board::from_fen("r3k2r/4B3/8/8/8/8/4b3/R3K2R w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
+
+      movegen.switch_turn();
+
+      let king = movegen.kings & movegen.ally;
+      assert_eq!(movegen.king_long_castle(king), 0);
+      assert_eq!(movegen.king_short_castle(king), 0);
     }
 
     #[test]
