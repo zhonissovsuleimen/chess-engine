@@ -336,10 +336,10 @@ impl MoveGen {
     let not_diag = (self.rooks | self.queens) & self.enemy;
     let ally_king = self.kings & self.ally;
 
+    self.save();
     for (dx, dy, diag_mask) in directions {
       let pinner = if_mask(diag_mask, diag, not_diag);
 
-      self.save();
       self.ally_is_enemy();
       let king_to_pin_path = self.iterative(ally_king, dx, dy);
       let king_hits_pin = king_to_pin_path & at_mask > 0;
@@ -349,7 +349,7 @@ impl MoveGen {
       let pin_hits_pinner = pin_to_pinner_path & pinner > 0;
 
       let pinned = mask_from_bool(king_hits_pin && pin_hits_pinner);
-      pin_path |= pinned & (king_to_pin_path | pin_to_pinner_path | pinner) & !at_mask;
+      pin_path |= pinned & (king_to_pin_path | pin_to_pinner_path) & !at_mask;
     }
 
     //king not under attack? kinda discovered pin and king attack
@@ -735,6 +735,101 @@ mod tests {
 
       assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
       assert_eq!(movegen.knight(ally_knight) & filter, 0);
+    }
+  }
+
+  mod bishop {
+    use crate::board::{Board, move_gen::MoveGen};
+
+    #[test]
+    fn default() {
+      let board = Board::from_fen("k7/8/8/3b4/3B4/8/8/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      assert_eq!(movegen.bishop(ally_bishop), 0x02_44_28_00_28_44_82_01);
+
+      movegen.switch_turn();
+      let ally_bishop = movegen.bishops & movegen.ally;
+      assert_eq!(movegen.bishop(ally_bishop), 0x01_82_44_28_00_28_44_02);
+    }
+
+    #[test]
+    fn default_on_edge() {
+      let board = Board::from_fen("kb6/8/8/8/8/8/8/KB6 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_bishops = movegen.bishops & movegen.ally;
+      assert_eq!(movegen.bishop(ally_bishops), 0x00_A0_10_08_04_02_01_00);
+      movegen.switch_turn();
+      let ally_bishops = movegen.bishops & movegen.ally;
+      assert_eq!(movegen.bishop(ally_bishops), 0x00_01_02_04_08_10_A0_00);
+    }
+
+    #[test]
+    fn pinned_vert() {
+      let board = Board::from_fen("k6K/b6B/8/8/8/8/8/R6r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      let filter = movegen.pin_filter(ally_bishop);
+
+      assert_eq!(filter, 0x01_01_01_01_01_01_00_00);
+      assert_eq!(movegen.bishop(ally_bishop) & filter, 0);
+
+      movegen.switch_turn();
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      let filter = movegen.pin_filter(ally_bishop);
+
+      assert_eq!(filter, 0x80_80_80_80_80_80_00_00);
+      assert_eq!(movegen.bishop(ally_bishop) & filter, 0);
+    }
+
+    #[test]
+    fn pinned_hor() {
+      let board = Board::from_fen("kb5R/8/8/8/8/8/8/KB5r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      let filter = movegen.pin_filter(ally_bishop);
+
+      assert_eq!(filter, 0x3F_00_00_00_00_00_00_00);
+      assert_eq!(movegen.bishop(ally_bishop) & filter, 0);
+
+      movegen.switch_turn();
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      let filter = movegen.pin_filter(ally_bishop);
+
+      assert_eq!(filter, 0x00_00_00_00_00_00_00_3F);
+      assert_eq!(movegen.bishop(ally_bishop) & filter, 0);
+    }
+
+    #[test]
+    fn pinned_diag() {
+      let board = Board::from_fen("k6q/1b6/8/8/8/8/1B6/K6Q w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      let filter = movegen.pin_filter(ally_bishop);
+
+      assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
+      assert_eq!(
+        movegen.bishop(ally_bishop) & filter,
+        0x00_00_20_10_08_04_02_01
+      );
+
+      movegen.switch_turn();
+
+      let ally_bishop = movegen.bishops & movegen.ally;
+      let filter = movegen.pin_filter(ally_bishop);
+
+      assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
+      assert_eq!(
+        movegen.bishop(ally_bishop) & filter,
+        0x01_02_04_08_10_20_00_00
+      );
     }
   }
 }
