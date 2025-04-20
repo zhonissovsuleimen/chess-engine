@@ -29,7 +29,6 @@ pub struct MoveGen {
   advance_mask: u64,
   en_passant_mask: u64,
   castling_mask: u64,
-  king_danger: u64,
 }
 
 //constructors
@@ -72,22 +71,8 @@ impl MoveGen {
       advance_mask: board.advance_mask,
       en_passant_mask: board.en_passant_mask,
       castling_mask: board.castling_mask,
-      king_danger: 0,
     };
 
-    movegen.switch_turn();
-    movegen.skip_enemy_king();
-    movegen.ally_is_enemy();
-    movegen.king_danger = movegen.knight(movegen.knights & movegen.enemy)
-      | movegen.bishop(movegen.bishops & movegen.enemy)
-      | movegen.rook(movegen.rooks & movegen.enemy)
-      | movegen.queen(movegen.queens & movegen.enemy)
-      | movegen.king_default(movegen.kings & movegen.enemy);
-    movegen.reset();
-
-    movegen.switch_turn();
-    movegen.empty_is_enemy();
-    movegen.king_danger |= movegen.pawn_capturing(movegen.pawns & movegen.enemy);
     movegen.reset();
     movegen
   }
@@ -107,7 +92,7 @@ impl MoveGen {
       rook: movegen.rook(at_mask & movegen.rooks & movegen.ally) & filter,
       queen: movegen.queen(at_mask & movegen.queens & movegen.ally) & filter,
       king_default: movegen.king_default(at_mask & movegen.kings & movegen.ally)
-        & !movegen.king_danger
+        & !movegen.king_danger()
         & filter,
       king_short_castle: movegen.king_short_castle(at_mask & movegen.kings & movegen.ally),
       king_long_castle: movegen.king_long_castle(at_mask & movegen.kings & movegen.ally),
@@ -283,9 +268,10 @@ impl MoveGen {
     moves
   }
 
-  fn king_long_castle(&self, at_mask: u64) -> u64 {
+  fn king_long_castle(&mut self, at_mask: u64) -> u64 {
     let rooks = self.rooks & self.ally;
     let long_rook = rooks & at_mask.move_left_mask(4);
+    let king_danger = self.king_danger();
 
     let long_rights = self.castling_mask & long_rook > 0 && self.castling_mask & at_mask > 0;
     let long_empty = at_mask
@@ -294,25 +280,26 @@ impl MoveGen {
       & self.empty.move_right_mask(3)
       > 0;
     let long_safe = at_mask
-      & !self.king_danger
-      & !self.king_danger.move_right_mask(1)
-      & !self.king_danger.move_right_mask(2)
+      & !king_danger
+      & !king_danger.move_right_mask(1)
+      & !king_danger.move_right_mask(2)
       > 0;
 
     let new_pos = at_mask.move_left_mask(2);
     new_pos & mask_from_bool(long_rights && long_empty && long_safe)
   }
 
-  fn king_short_castle(&self, at_mask: u64) -> u64 {
+  fn king_short_castle(&mut self, at_mask: u64) -> u64 {
     let rooks = self.rooks & self.ally;
     let short_rook = rooks & at_mask.move_right_mask(3);
+    let king_danger = self.king_danger();
 
     let short_rights = self.castling_mask & short_rook > 0 && self.castling_mask & at_mask > 0;
     let short_empty = at_mask & self.empty.move_left_mask(1) & self.empty.move_left_mask(2) > 0;
     let short_safe = at_mask
-      & !self.king_danger
-      & self.king_danger.move_left_mask(1)
-      & !self.king_danger.move_left_mask(2)
+      & !king_danger
+      & !king_danger.move_left_mask(1)
+      & !king_danger.move_left_mask(2)
       > 0;
 
     let new_pos = at_mask.move_right_mask(2);
@@ -389,6 +376,28 @@ impl MoveGen {
 
     if_bool(filter > 0, filter, u64::MAX)
   }
+
+  fn king_danger(&mut self) -> u64 {
+    let mut king_danger = 0;
+    self.switch_turn();
+    self.save();
+
+    self.empty_is_enemy();
+    king_danger |= self.pawn_capturing(self.pawns & self.ally);
+    king_danger |= self.knight(self.knights & self.ally);
+    king_danger |= self.king_default(self.kings & self.ally);
+
+
+    self.load();
+    self.remove_enemy_king();
+    king_danger |= self.bishop(self.bishops & self.ally);
+    king_danger |= self.rook(self.rooks & self.ally);
+    king_danger |= self.queen(self.queens & self.ally);
+
+    self.load();
+    self.switch_turn();
+    king_danger
+  }
 }
 
 //other
@@ -408,7 +417,7 @@ impl MoveGen {
     self.empty = 0;
   }
 
-  fn skip_enemy_king(&mut self) {
+  fn remove_enemy_king(&mut self) {
     self.enemy &= !(self.kings);
     self.empty = !(self.ally | self.enemy)
   }
@@ -434,8 +443,8 @@ impl MoveGen {
     self.empty = self.default_empty;
   }
 
-  pub(super) fn status(&self) -> u64 {
-    let checked = self.king_danger & (self.kings & self.ally) > 0;
+  pub(super) fn status(&mut self) -> u64 {
+    let checked = self.king_danger() & (self.kings & self.ally) > 0;
     // no pin / check filters for now
     let moves = self.pawn_default(self.pawns & self.ally)
       | self.pawn_advance(self.pawns & self.ally)
@@ -1025,6 +1034,120 @@ mod tests {
       assert_eq!(
         movegen.queen(ally_queen) & filter,
         0x01_02_04_08_10_20_00_00
+      );
+    }
+  }
+
+
+  mod king {
+    use crate::board::{Board, move_gen::MoveGen};
+
+    #[test]
+    fn default() {
+      let board = Board::from_fen("8/1k6/8/8/8/8/1K6/8 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_king = movegen.kings & movegen.ally;
+      assert_eq!(
+        movegen.king_default(ally_king) & !movegen.king_danger(),
+        0xE0_A0_E0_00_00_00_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_king = movegen.kings & movegen.ally;
+      assert_eq!(
+        movegen.king_default(ally_king) & !movegen.king_danger(),
+        0x00_00_00_00_00_E0_A0_E0
+      );
+    }
+
+    #[test]
+    fn default_on_edge() {
+      let board = Board::from_fen("k7/8/8/8/8/8/8/K7 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_king = movegen.kings & movegen.ally;
+      assert_eq!(
+        movegen.king_default(ally_king) & !movegen.king_danger(),
+        0x40_C0_00_00_00_00_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_king = movegen.kings & movegen.ally;
+      assert_eq!(
+        movegen.king_default(ally_king) & !movegen.king_danger(),
+        0x00_00_00_00_00_00_C0_40
+      );
+    }
+
+    #[test]
+    fn checked_vert() {
+      let board = Board::from_fen("r6R/8/8/8/8/8/8/K6k w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_king = movegen.kings & movegen.ally;
+      let check_filter = movegen.check_filter(ally_king);
+      assert_eq!(
+        movegen.king_default(ally_king) & check_filter & !movegen.king_danger(),
+        0x40_40_00_00_00_00_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_king = movegen.kings & movegen.ally;
+      let check_filter = movegen.check_filter(ally_king);
+      assert_eq!(check_filter, u64::MAX);
+      assert_eq!(
+        movegen.king_default(ally_king) & check_filter & !movegen.king_danger(),
+        0x02_02_00_00_00_00_00_00
+      );
+    }
+
+    #[test]
+    fn checked_hor() {
+      let board = Board::from_fen("k6R/8/8/8/8/8/8/K6r w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_king = movegen.kings & movegen.ally;
+      let check_filter = movegen.check_filter(ally_king);
+      assert_eq!(
+        movegen.king_default(ally_king) & check_filter & !movegen.king_danger(),
+        0x00_C0_00_00_00_00_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_king = movegen.kings & movegen.ally;
+      let check_filter = movegen.check_filter(ally_king);
+      assert_eq!(check_filter, u64::MAX);
+      assert_eq!(
+        movegen.king_default(ally_king) & check_filter & !movegen.king_danger(),
+        0x00_00_00_00_00_00_C0_00
+      );
+    }
+
+    #[test]
+    fn checked_diag() {
+      let board = Board::from_fen("k6b/8/8/8/8/8/8/K6B w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      let ally_king = movegen.kings & movegen.ally;
+      let check_filter = movegen.check_filter(ally_king);
+      assert_eq!(
+        movegen.king_default(ally_king) & check_filter & !movegen.king_danger(),
+        0x40_80_00_00_00_00_00_00
+      );
+
+      movegen.switch_turn();
+
+      let ally_king = movegen.kings & movegen.ally;
+      let check_filter = movegen.check_filter(ally_king);
+      assert_eq!(check_filter, u64::MAX);
+      assert_eq!(
+        movegen.king_default(ally_king) & check_filter & !movegen.king_danger(),
+        0x00_00_00_00_00_00_80_40
       );
     }
   }
