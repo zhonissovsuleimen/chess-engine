@@ -56,48 +56,39 @@ impl Board {
 
     //pieces
     let pieces = slices[0];
+    let rows: Vec<&str> = pieces.split('/').collect();
+    assert_eq!(rows.len(), 8);
 
-    let mut rank = 7;
-    let mut file = 0;
-    for c in pieces.chars() {
-      let mut increment_file = true;
+    for (row_id, row) in rows.iter().enumerate() {
+      let mut total = 0;
+      for c in row.chars() {
+        let pos = (0x80_u64).move_right_mask(total).move_down_mask(row_id as u32);
+        match c {
+          'P' => board.white.pawns |= pos,
+          'N' => board.white.knights |= pos,
+          'B' => board.white.bishops |= pos,
+          'R' => board.white.rooks |= pos,
+          'Q' => board.white.queens |= pos,
+          'K' => board.white.king = pos,
+          'p' => board.black.pawns |= pos,
+          'n' => board.black.knights |= pos,
+          'b' => board.black.bishops |= pos,
+          'r' => board.black.rooks |= pos,
+          'q' => board.black.queens |= pos,
+          'k' => board.black.king = pos,
+          digit if c.is_ascii_digit() => {
+            assert_ne!(digit, '0');
+            assert_ne!(digit, '9');
 
-      // let id = (7 - rank) * 8 + file;
-      let pos = 0x80_u64.move_right_mask(file).move_down_mask(7 - rank);
-      match c {
-        'P' => board.white.pawns |= pos,
-        'N' => board.white.knights |= pos,
-        'B' => board.white.bishops |= pos,
-        'R' => board.white.rooks |= pos,
-        'Q' => board.white.queens |= pos,
-        'K' => board.white.king = pos,
-        'p' => board.black.pawns |= pos,
-        'n' => board.black.knights |= pos,
-        'b' => board.black.bishops |= pos,
-        'r' => board.black.rooks |= pos,
-        'q' => board.black.queens |= pos,
-        'k' => board.black.king = pos,
-        digit if c.is_ascii_digit() => {
-          assert_ne!(digit, '0');
-          assert_ne!(digit, '9');
-
-          file += digit.to_digit(10).unwrap();
-          increment_file = false;
+            total += digit.to_digit(10).unwrap() - 1;
+          },
+          wrong_char => {
+            panic!("Unexpected character ({wrong_char}) in piece placement data");
+          }
         }
-        '/' => {
-          rank -= 1;
-          file = 0;
-
-          increment_file = false;
-        }
-        wrong_char => {
-          panic!("Unexpected character ({wrong_char}) in piece placement data");
-        }
+        total += 1;
       }
-
-      if increment_file {
-        file += 1;
-      }
+      assert_eq!(total, 8, "The row {} contains {} squares", row_id + 1, total);
     }
 
     //advance mask
@@ -362,6 +353,18 @@ mod tests {
       assert_eq!(a.advance_mask, b.advance_mask);
       assert_eq!(a.en_passant_mask, b.en_passant_mask);
       assert_eq!(a.castling_mask, b.castling_mask);
+    }
+
+    #[test]
+    #[should_panic]
+    fn fen_incorrect_row_data() {
+      Board::from_fen(r"rnbqkbnr/pppppppp/8/8/7/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    }
+
+    #[test]
+    #[should_panic]
+    fn fen_only_piece_data() {
+      Board::from_fen(r"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     }
   }
 

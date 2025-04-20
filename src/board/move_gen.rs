@@ -536,8 +536,8 @@ mod tests {
     }
 
     #[test]
-    fn advance_already_advanced() {
-      let board = Board::from_fen("k7/8/p7/8/8/P7/p/K7 w - - 0 1");
+    fn advance_already_moved() {
+      let board = Board::from_fen("k7/8/p7/8/8/7P/8/7K w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(movegen.pawn_advance(0x00_80_00_00_00_00_00_00), 0);
@@ -547,7 +547,7 @@ mod tests {
 
     #[test]
     fn capturing() {
-      let board = Board::from_fen("k7/1p6/P1P6/8/8/p1p6/1P6/K7 w - - 0 1");
+      let board = Board::from_fen("k7/1p6/P1P5/8/8/p1p5/1P6/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(
@@ -651,7 +651,7 @@ mod tests {
 
     #[test]
     fn default() {
-      let board = Board::from_fen("k7/8/8/3n4/4N4/8/8/K7 w - - 0 1");
+      let board = Board::from_fen("k7/8/8/3n4/4N3/8/8/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(
