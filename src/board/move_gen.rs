@@ -240,29 +240,29 @@ impl MoveGen {
 
   fn iterative(&self, at_mask: u64, dx: i32, dy: i32) -> u64 {
     let mut moves = 0;
-    let mut current = (dx, dy);
-    loop {
-      let mut new_move = if_bool(
-        dx > 0,
-        at_mask.move_right_mask(current.0.unsigned_abs()),
-        at_mask.move_left_mask(current.0.unsigned_abs()),
-      );
-      new_move = if_bool(
-        dy > 0,
-        new_move.move_up_mask(current.1.unsigned_abs()),
-        new_move.move_down_mask(current.1.unsigned_abs()),
-      );
 
-      current = (current.0 + dx, current.1 + dy);
+    let pos_dx = mask_from_bool(dx > 0);
+    let pos_dy = mask_from_bool(dy > 0);
+
+    for i in 1..=7 {
+      let mut new_move = if_mask(
+        pos_dx,
+        at_mask.move_right_mask(i * dx.unsigned_abs()),
+        at_mask.move_left_mask(i * dx.unsigned_abs()),
+      );
+      new_move = if_mask(
+        pos_dy,
+        new_move.move_up_mask(i * dy.unsigned_abs()),
+        new_move.move_down_mask(i * dy.unsigned_abs()),
+      );
 
       let within_board = new_move > 0;
       let is_enemy = new_move & self.enemy > 0;
       let is_empty = new_move & self.empty > 0;
-      let is_ally = !(is_empty || is_enemy);
 
-      moves |= if_bool(is_enemy || is_empty, new_move, 0);
+      moves |= new_move & mask_from_bool(is_enemy || is_empty);
 
-      if !within_board || is_ally || is_enemy {
+      if !within_board || !is_empty {
         break;
       }
     }
@@ -313,39 +313,36 @@ impl MoveGen {
 //other
 impl MoveGen {
   fn pin_filter(&mut self, at_mask: u64) -> u64 {
+    let diag = (self.bishops | self.queens) & self.enemy;
+    let not_diag = (self.rooks | self.queens) & self.enemy;
+
     let directions = [
-      (-1, 1, u64::MAX),
-      (0, 1, 0),
-      (1, 1, u64::MAX),
-      (-1, 0, 0),
-      (1, 0, 0),
-      (-1, -1, u64::MAX),
-      (0, -1, 0),
-      (1, -1, u64::MAX),
+      (-1, 1, diag),
+      (0, 1, not_diag),
+      (1, 1, diag),
+      (-1, 0, not_diag),
+      (1, 0, not_diag),
+      (-1, -1, diag),
+      (0, -1, not_diag),
+      (1, -1, diag),
     ];
 
     let mut pin_path = 0;
-    let diag = (self.bishops | self.queens) & self.enemy;
-    let not_diag = (self.rooks | self.queens) & self.enemy;
     let ally_king = self.kings & self.ally;
 
     self.save();
-    for (dx, dy, diag_mask) in directions {
-      let pinner = if_mask(diag_mask, diag, not_diag);
-
-      self.ally_is_enemy();
-      let king_to_pin_path = self.iterative(ally_king, dx, dy);
-      let king_hits_pin = king_to_pin_path & at_mask > 0;
-
+    for (dx, dy, diag) in directions {
+      self.remove_piece(at_mask);
+      let king_to_pinner_path = self.iterative(ally_king, dx, dy);
+      let king_hits_pinner = king_to_pinner_path & diag > 0;
       self.load();
-      let pin_to_pinner_path = self.iterative(at_mask, dx, dy);
-      let pin_hits_pinner = pin_to_pinner_path & pinner > 0;
+      let path_contains_pin = king_to_pinner_path & at_mask > 0;
 
-      let pinned = mask_from_bool(king_hits_pin && pin_hits_pinner);
-      pin_path |= pinned & (king_to_pin_path | pin_to_pinner_path) & !at_mask;
+      let pinned = mask_from_bool(king_hits_pinner & path_contains_pin);
+      pin_path |= pinned & king_to_pinner_path & !at_mask;
     }
 
-    if_bool(pin_path > 0, pin_path, u64::MAX)
+    mask_from_bool(pin_path == 0) | pin_path
   }
 
   fn check_filter(&self, at_mask: u64) -> u64 {
@@ -392,7 +389,7 @@ impl MoveGen {
     king_danger |= self.king_default(self.kings & self.ally);
 
     self.load();
-    self.remove_enemy_king();
+    self.remove_piece(self.kings & self.enemy);
     king_danger |= self.bishop(self.bishops & self.ally);
     king_danger |= self.rook(self.rooks & self.ally);
     king_danger |= self.queen(self.queens & self.ally);
@@ -408,9 +405,8 @@ impl MoveGen {
       | self.pawn_advance(self.pawns & self.ally)
       | self.pawn_capturing(self.pawns & self.ally)
       | self.knight(self.knights & self.ally)
-      | self.bishop(self.bishops & self.ally)
-      | self.rook(self.rooks & self.ally)
-      | self.queen(self.queens & self.ally)
+      | self.bishop((self.queens | self.bishops) & self.ally)
+      | self.rook((self.queens | self.rooks) & self.ally)
       | self.king_default(self.kings & self.ally)
       | self.king_short_castle(self.kings & self.ally)
       | self.king_long_castle(self.kings & self.ally);
@@ -423,16 +419,15 @@ impl MoveGen {
 
     let king_vs_king = self.ally | self.enemy == self.kings;
 
-    let ally_knight_count = (self.ally & self.knights).count_ones();
-    let enemy_knight_count = (self.enemy & self.bishops).count_ones();
+    let knight_count = self.knights.count_ones();
     let ally_bishop_count = (self.ally & self.bishops).count_ones();
     let enemy_bishop_count = (self.enemy & self.bishops).count_ones();
 
     let king_minor_vs_king = (self.ally | self.enemy) == (self.kings | self.knights | self.bishops)
-      && (ally_bishop_count + ally_knight_count + enemy_bishop_count + enemy_knight_count == 1);
+      && (knight_count + ally_bishop_count + enemy_bishop_count == 1);
 
-    let same_square_color = (self.bishops & self.ally).trailing_zeros() % 2
-      == (self.bishops & self.enemy).trailing_zeros() % 2;
+    let black_squares = 0xAA_55_AA_55_AA_55_AA_55_u64;
+    let same_square_color = (self.bishops & black_squares).count_ones() > 0;
 
     let king_bishop_vs_king_bishop = (self.ally | self.enemy) == (self.kings | self.bishops)
       && (ally_bishop_count == 1 && enemy_bishop_count == 1)
@@ -452,19 +447,15 @@ impl MoveGen {
     mem::swap(&mut self.ally, &mut self.enemy);
   }
 
-  fn ally_is_enemy(&mut self) {
-    self.enemy |= self.ally;
-    self.ally = 0;
-  }
-
   fn empty_is_enemy(&mut self) {
     self.enemy |= self.empty;
     self.empty = 0;
   }
 
-  fn remove_enemy_king(&mut self) {
-    self.enemy &= !(self.kings);
-    self.empty = !(self.ally | self.enemy)
+  fn remove_piece(&mut self, at_mask: u64) {
+    self.ally &= !(at_mask);
+    self.enemy &= !(at_mask);
+    self.empty |= at_mask;
   }
 
   fn save(&mut self) {
