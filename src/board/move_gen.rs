@@ -7,10 +7,6 @@ use super::{
 };
 
 pub struct MoveGen {
-  default_white_turn_mask: u64,
-  default_ally: u64,
-  default_enemy: u64,
-  default_empty: u64,
   saved_white_turn_mask: u64,
   saved_ally: u64,
   saved_enemy: u64,
@@ -48,11 +44,7 @@ impl MoveGen {
     );
     let empty = !(ally | enemy);
 
-    let mut movegen = MoveGen {
-      default_white_turn_mask: white_turn_mask,
-      default_ally: ally,
-      default_enemy: enemy,
-      default_empty: empty,
+    let movegen = MoveGen {
       saved_white_turn_mask: white_turn_mask,
       saved_ally: ally,
       saved_enemy: enemy,
@@ -74,7 +66,6 @@ impl MoveGen {
       castling_mask: board.castling_mask,
     };
 
-    movegen.reset();
     movegen
   }
 
@@ -470,13 +461,6 @@ impl MoveGen {
     self.ally = self.saved_ally;
     self.enemy = self.saved_enemy;
     self.empty = self.saved_empty;
-  }
-
-  fn reset(&mut self) {
-    self.white_turn_mask = self.default_white_turn_mask;
-    self.ally = self.default_ally;
-    self.enemy = self.default_enemy;
-    self.empty = self.default_empty;
   }
 }
 
