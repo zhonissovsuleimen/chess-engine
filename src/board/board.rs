@@ -293,6 +293,18 @@ impl Board {
     let moves = MoveGen::cached(&self, at_mask);
     moves.all()
   }
+
+  pub fn is_white(&self, at_mask: u64) -> bool {
+    self.white.pieces_concat() & at_mask == at_mask
+  }
+
+  pub fn is_black(&self, at_mask: u64) -> bool {
+    self.black.pieces_concat() & at_mask == at_mask
+  }
+
+  pub fn is_empty(&self, at_mask: u64) -> bool {
+    self.white.is_empty(at_mask) && self.black.is_empty(at_mask)
+  }
 }
 
 #[cfg(test)]

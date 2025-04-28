@@ -1,25 +1,15 @@
 mod board;
+mod board_assets;
 mod board_position_lookup;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 use board::Board;
-use board_position_lookup::{CENTER_LOOKUP, X_LOOKUP, Y_LOOKUP};
+use board_assets::{BoardAssets, PieceTag};
+use board_position_lookup::{X_LOOKUP, Y_LOOKUP};
 
-#[derive(Component)]
-struct MoveCircleTag;
-
-#[derive(Component)]
-struct PieceTag(bool);
-
-struct SelectedPieceData {
-  entity: Entity,
-  original_translation: Vec3,
-  original_board_pos: usize,
-}
-
-#[derive(Resource, Default)]
+#[derive(Resource)]
 struct SelectedPiece {
-  data: Option<SelectedPieceData>,
+  data: Option<(Entity, usize)>,
 }
 
 #[derive(Resource, Default)]
@@ -45,217 +35,74 @@ fn main() {
 
   App::new()
     .add_plugins(plugins)
-    .add_systems(PreStartup, startup)
-    .add_systems(Startup, create_sprites)
-    .add_systems(PreUpdate, update_mouse_data)
-    .add_systems(Update, detect_piece)
-    .add_systems(PostUpdate, update_moves_sprite)
+    .add_systems(Startup, (setup, initial_draw).chain())
+    .add_systems(Update, (update_mouse_data, make_move, draw).chain())
     .run();
 }
 
-fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
   commands.spawn(Camera2d);
-  commands.spawn(Sprite::from_image(asset_server.load("board.png")));
 
   commands.insert_resource(Board::default());
-  commands.insert_resource(SelectedPiece::default());
   commands.insert_resource(MouseData::default());
+  commands.insert_resource(SelectedPiece { data: None });
+  commands.insert_resource(BoardAssets::new(asset_server));
 }
 
-fn detect_piece(
-  mut commands: Commands,
+fn initial_draw(mut commands: Commands, mut assets: ResMut<BoardAssets>, board: Res<Board>) {
+  assets.draw_board(&mut commands);
+  assets.draw_pieces(&mut commands, &board);
+}
+
+fn make_move(
+  mouse: Res<MouseData>,
   mut board: ResMut<Board>,
   mut selected_piece: ResMut<SelectedPiece>,
-  asset_server: Res<AssetServer>,
-  mouse: Res<MouseData>,
-  sprites: Res<Assets<Image>>,
-  mut sprite_query: Query<(Entity, &Sprite, &mut Transform, &PieceTag)>,
 ) {
-  match &mut selected_piece.data {
-    Some(data) if mouse.being_pressed => {
-      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
+  let to = mouse.board_pos;
+
+  if let Some((_, from)) = selected_piece.data {
+    if mouse.just_released {
+      board.move_piece(from, to);
+      selected_piece.data = None;
+    }
+  }
+}
+
+fn draw(
+  mut commands: Commands,
+  mouse: Res<MouseData>,
+  board: Res<Board>,
+  mut selected_piece: ResMut<SelectedPiece>,
+  mut assets: ResMut<BoardAssets>,
+  mut sprite_query: Query<(Entity, &mut Transform, &PieceTag), With<PieceTag>>,
+) {
+  let at_mask = 1 << mouse.board_pos;
+
+  if mouse.just_released {
+    assets.remove_moves(&mut commands);
+    assets.remove_pieces(&mut commands);
+    assets.draw_pieces(&mut commands, &board);
+  } else if mouse.just_pressed {
+    let correct_turn = board.white_turn == board.is_white(at_mask) 
+      || board.white_turn == board.is_black(at_mask);
+    if !correct_turn {
+      return;
+    }
+
+    for (entity, _, tag) in &sprite_query {
+      if mouse.board_pos == tag.0 {
+        selected_piece.data = Some((entity, tag.0));
+        assets.draw_moves(&mut commands, &board, at_mask);
+      }
+    }
+  } else if mouse.being_pressed {
+    if let Some((entity, _)) = selected_piece.data {
+      if let Ok((_, mut transform, _)) = sprite_query.get_mut(entity) {
         transform.translation.x = mouse.x;
         transform.translation.y = mouse.y;
         transform.translation.z = 1.0;
       }
-    }
-    Some(data) if mouse.just_released => {
-      if let Ok((_, _, mut transform, _)) = sprite_query.get_mut(data.entity) {
-        if board.move_piece(data.original_board_pos, mouse.board_pos) {
-          transform.translation = CENTER_LOOKUP[mouse.board_pos];
-
-          for (sprite, _, _, _) in sprite_query.iter() {
-            commands.entity(sprite).despawn();
-          }
-          create_sprites(commands, asset_server, board);
-        } else {
-          transform.translation = data.original_translation;
-        }
-      }
-      selected_piece.data = None;
-    }
-    None if mouse.just_pressed => {
-      for (entity, sprite, transform, is_white) in &sprite_query {
-        if is_white.0 != board.white_turn {
-          continue;
-        }
-
-        if let Some(image) = &sprites.get(sprite.image.id()) {
-          let size = image.size();
-          let scale = transform.scale.truncate();
-
-          let true_size = Vec2 {
-            x: size.x as f32 * scale.x,
-            y: size.y as f32 * scale.y,
-          };
-
-          //transforms are from the pov of a 2d camera so from (-0.5 to 0.5) * width or height
-          let image_center = transform.translation.truncate();
-          let x0 = image_center.x - true_size.x / 2.0;
-          let x1 = image_center.x + true_size.x / 2.0;
-
-          let y0 = image_center.y - true_size.y / 2.0;
-          let y1 = image_center.y + true_size.y / 2.0;
-
-          if mouse.x > x0 && mouse.x < x1 && mouse.y > y0 && mouse.y < y1 {
-            let data = SelectedPieceData {
-              entity,
-              original_translation: transform.translation,
-              original_board_pos: mouse.board_pos,
-            };
-
-            selected_piece.data = Some(data);
-          }
-        }
-      }
-    }
-    _ => {}
-  }
-}
-
-fn create_sprites(
-  mut commands: Commands,
-  asset_server: Res<AssetServer>,
-  board: ResMut<Board>,
-) {
-  for (i, lookup) in CENTER_LOOKUP.into_iter().enumerate() {
-    let at_mask = 1 << i;
-
-    let transform = Transform {
-      translation: lookup,
-      scale: Vec3::new(0.75, 0.75, 1.0),
-      rotation: Quat::IDENTITY,
-    };
-
-    if board.white.is_pawn(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/white-pawn.png")),
-        transform,
-        PieceTag(true),
-      ));
-    } else if board.white.is_knight(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/white-knight.png")),
-        transform,
-        PieceTag(true),
-      ));
-    } else if board.white.is_bishop(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/white-bishop.png")),
-        transform,
-        PieceTag(true),
-      ));
-    } else if board.white.is_rook(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/white-rook.png")),
-        transform,
-        PieceTag(true),
-      ));
-    } else if board.white.is_queen(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/white-queen.png")),
-        transform,
-        PieceTag(true),
-      ));
-    } else if board.white.is_king(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/white-king.png")),
-        transform,
-        PieceTag(true),
-      ));
-    } else if board.black.is_pawn(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/black-pawn.png")),
-        transform,
-        PieceTag(false),
-      ));
-    } else if board.black.is_knight(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/black-knight.png")),
-        transform,
-        PieceTag(false),
-      ));
-    } else if board.black.is_bishop(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/black-bishop.png")),
-        transform,
-        PieceTag(false),
-      ));
-    } else if board.black.is_rook(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/black-rook.png")),
-        transform,
-        PieceTag(false),
-      ));
-    } else if board.black.is_queen(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/black-queen.png")),
-        transform,
-        PieceTag(false),
-      ));
-    } else if board.black.is_king(at_mask) {
-      commands.spawn((
-        Sprite::from_image(asset_server.load("pieces/black-king.png")),
-        transform,
-        PieceTag(false),
-      ));
-    }
-  }
-}
-
-fn update_moves_sprite(
-  mut commands: Commands,
-  asset_server: Res<AssetServer>,
-  board: Res<Board>,
-  mouse: Res<MouseData>,
-  sprites: Query<Entity, With<MoveCircleTag>>,
-  selected_piece: ResMut<SelectedPiece>,
-) {
-  if mouse.just_pressed {
-    if let Some(piece) = &selected_piece.data {
-      let piece_mask = 1 << piece.original_board_pos;
-      let moves_mask = board.get_piece_moves(piece_mask);
-
-      for (i, lookup) in CENTER_LOOKUP.into_iter().enumerate() {
-        if (moves_mask >> i) & 1 == 0 {
-          continue;
-        }
-
-        let transform = Transform {
-          translation: lookup + Vec3::new(0.0, 0.0, 0.1),
-          scale: Vec3::new(0.2, 0.2, 1.0),
-          rotation: Quat::IDENTITY,
-        };
-
-        let mut sprite = Sprite::from_image(asset_server.load("circle.png"));
-        sprite.color.set_alpha(0.5);
-
-        commands.spawn((sprite, transform, MoveCircleTag));
-      }
-    }
-  } else if mouse.just_released {
-    for sprite in &sprites {
-      commands.entity(sprite).despawn();
     }
   }
 }

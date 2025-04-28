@@ -108,6 +108,10 @@ impl Pieces {
     }
   }
 
+  pub fn is_empty(&self, at_mask: u64) -> bool {
+    self.pieces_concat() & at_mask == 0
+  }
+
   pub fn is_pawn(&self, at_mask: u64) -> bool {
     self.pawns & at_mask > 0
   }
