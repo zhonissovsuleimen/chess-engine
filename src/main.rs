@@ -3,7 +3,7 @@ mod board_assets;
 mod board_position_lookup;
 
 use bevy::{prelude::*, window::PrimaryWindow};
-use board::Board;
+use board::{Board, MoveInput};
 use board_assets::{BoardAssets, PieceTag};
 use board_position_lookup::{X_LOOKUP, Y_LOOKUP};
 
@@ -63,7 +63,7 @@ fn make_move(
 
   if let Some((_, from)) = selected_piece.data {
     if mouse.just_released {
-      board.move_piece(from, to);
+      board.move_piece(MoveInput::from_id(from, to));
       selected_piece.data = None;
     }
   }

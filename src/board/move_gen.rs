@@ -483,7 +483,7 @@ impl MoveGen {
 #[cfg(test)]
 mod tests {
   mod pawn {
-    use crate::board::{Board, move_gen::MoveGen};
+    use crate::board::{Board, move_gen::MoveGen, move_input::MoveInput};
 
     #[test]
     fn default() {
@@ -566,16 +566,15 @@ mod tests {
     #[test]
     fn en_passant() {
       let mut board = Board::from_fen("k7/p7/8/1P6/1p6/8/P7/K7 w - - 0 1");
-      board.move_piece(55, 39);
+      board.move_piece(MoveInput::from_id(55, 39));
       let movegen = MoveGen::default(&board);
       assert_eq!(
         movegen.pawn_capturing(0x00_00_00_40_00_00_00_00),
         0x00_00_80_00_00_00_00_00
       );
 
-
       let mut board = Board::from_fen("k7/p7/8/1P6/1p6/8/P7/K7 b - - 0 1");
-      board.move_piece(15, 31);
+      board.move_piece(MoveInput::from_id(15, 31));
       let movegen = MoveGen::default(&board);
       assert_eq!(
         movegen.pawn_capturing(0x00_00_00_00_40_00_00_00),

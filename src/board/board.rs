@@ -1,7 +1,10 @@
 //todo: forced 3 fold repetition, simplified table, hashing, promoting lOl
 use bevy::ecs::system::Resource;
 
-use super::{board_movement_trait::BoardMovement, cached_piece_moves::CachedPieceMoves, move_gen::MoveGen, pieces::Pieces, status::*, util_fns::*};
+use super::{
+  MoveInput, board_movement_trait::BoardMovement, cached_piece_moves::CachedPieceMoves,
+  move_gen::MoveGen, pieces::Pieces, status::*, util_fns::*,
+};
 
 #[derive(Resource)]
 pub struct Board {
@@ -163,13 +166,14 @@ impl Board {
 
 //moving/updating
 impl Board {
-  pub fn move_piece(&mut self, from_id: usize, to_id: usize) -> bool {
-    let from_mask: u64 = if_bool(from_id < 64, 1 << from_id, 0);
-    let to_mask: u64 = if_bool(to_id < 64, 1 << to_id, 0);
+  pub fn move_piece(&mut self, input: MoveInput) -> bool {
+    let from_mask: u64 = input.from;
+    let to_mask: u64 = input.to;
+
     self.moves = MoveGen::cached(&self, from_mask);
     self.update_status();
     let playing = mask_from_bool(self.status == PLAYING);
-    
+
     let move_mask = to_mask & self.moves.all() & playing;
 
     //order matters
@@ -381,25 +385,25 @@ mod tests {
   }
 
   mod clock {
-    use crate::board::Board;
+    use crate::board::{Board, move_input::MoveInput};
 
     #[test]
     fn full_clock() {
       let mut board = Board::default();
       assert_eq!(board.clock, 1);
 
-      assert_eq!(board.move_piece(52, 36), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(52, 36)), true);
       assert_eq!(board.clock, 1);
-      assert_eq!(board.move_piece(12, 4), false);
+      assert_eq!(board.move_piece(MoveInput::from_id(12, 4)), false);
       assert_eq!(board.clock, 1);
-      assert_eq!(board.move_piece(12, 28), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(12, 28)), true);
       assert_eq!(board.clock, 2);
 
-      assert_eq!(board.move_piece(61, 34), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(61, 34)), true);
       assert_eq!(board.clock, 2);
-      assert_eq!(board.move_piece(56, 57), false);
+      assert_eq!(board.move_piece(MoveInput::from_id(56, 57)), false);
       assert_eq!(board.clock, 2);
-      assert_eq!(board.move_piece(1, 18), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(1, 18)), true);
       assert_eq!(board.clock, 3);
     }
 
@@ -408,25 +412,25 @@ mod tests {
       let mut board = Board::default();
       assert_eq!(board.half_clock, 0);
 
-      assert_eq!(board.move_piece(52, 36), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(52, 36)), true);
       assert_eq!(board.half_clock, 0);
-      assert_eq!(board.move_piece(12, 4), false);
+      assert_eq!(board.move_piece(MoveInput::from_id(12, 4)), false);
       assert_eq!(board.half_clock, 0);
-      assert_eq!(board.move_piece(12, 28), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(12, 28)), true);
       assert_eq!(board.half_clock, 0);
 
-      assert_eq!(board.move_piece(61, 34), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(61, 34)), true);
       assert_eq!(board.half_clock, 1);
-      assert_eq!(board.move_piece(56, 57), false);
+      assert_eq!(board.move_piece(MoveInput::from_id(56, 57)), false);
       assert_eq!(board.half_clock, 1);
-      assert_eq!(board.move_piece(1, 18), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(1, 18)), true);
       assert_eq!(board.half_clock, 2);
 
-      assert_eq!(board.move_piece(34, 20), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(34, 20)), true);
       assert_eq!(board.half_clock, 3);
-      assert_eq!(board.move_piece(55, 47), false);
+      assert_eq!(board.move_piece(MoveInput::from_id(55, 47)), false);
       assert_eq!(board.half_clock, 3);
-      assert_eq!(board.move_piece(4, 20), true);
+      assert_eq!(board.move_piece(MoveInput::from_id(4, 20)), true);
       assert_eq!(board.half_clock, 0);
     }
   }
