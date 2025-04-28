@@ -1,9 +1,8 @@
-//todo: forced 3 fold repetition, simplified table, hashing, promoting lOl
+//todo: forced 3 fold repetition, simplified table, hashing
 use bevy::ecs::system::Resource;
 
 use super::{
-  MoveInput, board_movement_trait::BoardMovement, cached_piece_moves::CachedPieceMoves,
-  move_gen::MoveGen, pieces::Pieces, status::*, util_fns::*,
+  board_movement_trait::BoardMovement, cached_piece_moves::CachedPieceMoves, move_gen::MoveGen, move_input::{BISHOP, KNIGHT, QUEEN, ROOK}, pieces::Pieces, status::*, util_fns::*, MoveInput
 };
 
 #[derive(Resource)]
@@ -18,7 +17,7 @@ pub struct Board {
 
   pub(super) advance_mask: u64,
   pub(super) en_passant_mask: u64,
-  pub(super) castling_mask: u64,
+  pub(super) castle_mask: u64,
 }
 
 //constructor
@@ -43,11 +42,11 @@ impl Board {
       black: Pieces::empty(),
       clock: 1,
       half_clock: 0,
+      moves: CachedPieceMoves::default(),
 
       advance_mask: 0,
       en_passant_mask: 0,
-      castling_mask: 0,
-      moves: CachedPieceMoves::default(),
+      castle_mask: 0,
     }
   }
 
@@ -113,10 +112,10 @@ impl Board {
 
       for c in chars {
         match c {
-          'K' => board.castling_mask |= 0x09_00_00_00_00_00_00_00,
-          'Q' => board.castling_mask |= 0x88_00_00_00_00_00_00_00,
-          'k' => board.castling_mask |= 0x00_00_00_00_00_00_00_09,
-          'q' => board.castling_mask |= 0x00_00_00_00_00_00_00_88,
+          'K' => board.castle_mask |= 0x09_00_00_00_00_00_00_00,
+          'Q' => board.castle_mask |= 0x88_00_00_00_00_00_00_00,
+          'k' => board.castle_mask |= 0x00_00_00_00_00_00_00_09,
+          'q' => board.castle_mask |= 0x00_00_00_00_00_00_00_88,
           wrong_char => {
             panic!("Unexpected character ({wrong_char}) in castling rights data")
           }
@@ -180,7 +179,7 @@ impl Board {
     self.handle_en_passant(move_mask);
     self.handle_pawn_advance(from_mask, move_mask);
     self.handle_castling(from_mask, move_mask);
-    self.handle_move(from_mask, move_mask);
+    self.handle_move(from_mask, move_mask, input.promotion);
 
     self.update_clocks(move_mask);
     self.white_turn ^= move_mask > 0;
@@ -190,7 +189,7 @@ impl Board {
   fn initialize_masks(&mut self) {
     self.advance_mask = self.white.pawns | self.black.pawns;
     self.en_passant_mask = 0;
-    self.castling_mask = self.white.king | self.white.rooks | self.black.king | self.black.rooks;
+    self.castle_mask = self.white.king | self.white.rooks | self.black.king | self.black.rooks;
   }
 
   fn update_status(&mut self) {
@@ -244,7 +243,7 @@ impl Board {
     let king_move = self.moves.king_default;
     let rook_move = self.moves.rook;
     let revoke_castling_move = move_mask & (king_move | rook_move);
-    self.castling_mask &= !revoke_castling_move;
+    self.castle_mask &= !revoke_castling_move;
 
     let long_castled = move_mask & self.moves.king_long_castle;
     let short_castled = move_mask & self.moves.king_short_castle;
@@ -256,14 +255,29 @@ impl Board {
     self.black.move_piece(rook_from, rook_to);
 
     let castled = mask_from_bool(long_castled | short_castled > 0);
-    self.castling_mask &= !(castled & from_mask);
+    self.castle_mask &= !(castled & from_mask);
   }
 
-  fn handle_move(&mut self, from_mask: u64, move_mask: u64) {
+  fn handle_move(&mut self, from_mask: u64, move_mask: u64, promotion_choice: u64) {
     self.white.remove_piece(move_mask);
     self.black.remove_piece(move_mask);
+
     self.white.move_piece(from_mask, move_mask);
     self.black.move_piece(from_mask, move_mask);
+
+    let knight_promotion = mask_from_bool(self.moves.pawn_promote > 0 && promotion_choice == KNIGHT);
+    let bishop_promotion = mask_from_bool(self.moves.pawn_promote > 0 && promotion_choice == BISHOP);
+    let rook_promotion = mask_from_bool(self.moves.pawn_promote > 0 && promotion_choice == ROOK);
+    let queen_promotion = mask_from_bool(self.moves.pawn_promote > 0 && promotion_choice == QUEEN);
+
+    self.white.promote_to_knight(knight_promotion & move_mask);
+    self.white.promote_to_bishop(bishop_promotion & move_mask);
+    self.white.promote_to_rook(rook_promotion & move_mask);
+    self.white.promote_to_queen(queen_promotion & move_mask);
+    self.black.promote_to_knight(knight_promotion & move_mask);
+    self.black.promote_to_bishop(bishop_promotion & move_mask);
+    self.black.promote_to_rook(rook_promotion & move_mask);
+    self.black.promote_to_queen(queen_promotion & move_mask);
   }
 }
 
@@ -340,7 +354,7 @@ mod tests {
 
       assert_eq!(board.advance_mask, 0x00_FF_00_00_00_00_FF_00);
       assert_eq!(board.en_passant_mask, 0x00_00_00_00_00_00_00_00);
-      assert_eq!(board.castling_mask, 0x89_00_00_00_00_00_00_89);
+      assert_eq!(board.castle_mask, 0x89_00_00_00_00_00_00_89);
     }
 
     #[test]
@@ -368,7 +382,7 @@ mod tests {
 
       assert_eq!(a.advance_mask, b.advance_mask);
       assert_eq!(a.en_passant_mask, b.en_passant_mask);
-      assert_eq!(a.castling_mask, b.castling_mask);
+      assert_eq!(a.castle_mask, b.castle_mask);
     }
 
     #[test]

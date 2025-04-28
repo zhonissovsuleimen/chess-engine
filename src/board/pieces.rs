@@ -1,4 +1,4 @@
-use super::util_fns::if_bool;
+use super::util_fns::{if_bool, mask_from_bool};
 
 // rank 8 file h is bit 0, rank 1 file a is bit 63 (so top to bottom, right to left)
 pub struct Pieces {
@@ -106,6 +106,30 @@ impl Pieces {
     for piece in self.pieces_as_mut_array() {
       *piece &= !at_mask;
     }
+  }
+
+  pub fn promote_to_knight(&mut self, at_mask: u64) {
+    let valid = mask_from_bool(self.pawns & at_mask > 0 && self.knights & at_mask == 0);
+    self.pawns &= !(valid & at_mask);
+    self.knights |= valid & at_mask;
+  }
+
+  pub fn promote_to_bishop(&mut self, at_mask: u64) {
+    let valid = mask_from_bool(self.pawns & at_mask > 0 && self.bishops & at_mask == 0);
+    self.pawns &= !(valid & at_mask);
+    self.bishops |= valid & at_mask;
+  }
+
+  pub fn promote_to_rook(&mut self, at_mask: u64) {
+    let valid = mask_from_bool(self.pawns & at_mask > 0 && self.rooks & at_mask == 0);
+    self.pawns &= !(valid & at_mask);
+    self.rooks |= valid & at_mask;
+  }
+
+  pub fn promote_to_queen(&mut self, at_mask: u64) {
+    let valid = mask_from_bool(self.pawns & at_mask > 0 && self.queens & at_mask == 0);
+    self.pawns &= !(valid & at_mask);
+    self.queens |= valid & at_mask;
   }
 
   pub fn is_empty(&self, at_mask: u64) -> bool {

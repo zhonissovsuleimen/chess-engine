@@ -1,4 +1,4 @@
-//status pin filter check needed? 
+//status pin filter check needed?
 use std::mem;
 
 use super::{
@@ -25,7 +25,7 @@ pub struct MoveGen {
 
   advance_mask: u64,
   en_passant_mask: u64,
-  castling_mask: u64,
+  castle_mask: u64,
 }
 
 //constructors
@@ -63,7 +63,7 @@ impl MoveGen {
 
       advance_mask: board.advance_mask,
       en_passant_mask: board.en_passant_mask,
-      castling_mask: board.castling_mask,
+      castle_mask: board.castle_mask,
     };
 
     movegen
@@ -78,7 +78,8 @@ impl MoveGen {
     let mut moves = CachedPieceMoves {
       pawn_default: movegen.pawn_default(at_mask & movegen.pawns & movegen.ally) & filter,
       pawn_advance: movegen.pawn_advance(at_mask & movegen.pawns & movegen.ally) & filter,
-      pawn_capturing: movegen.pawn_capturing(at_mask & movegen.pawns & movegen.ally) & filter,
+      pawn_capture: movegen.pawn_capture(at_mask & movegen.pawns & movegen.ally) & filter,
+      pawn_promote: movegen.pawn_promote(at_mask & movegen.pawns & movegen.ally) & filter,
       knight: movegen.knight(at_mask & movegen.knights & movegen.ally) & filter,
       bishop: movegen.bishop(at_mask & movegen.bishops & movegen.ally) & filter,
       rook: movegen.rook(at_mask & movegen.rooks & movegen.ally) & filter,
@@ -100,27 +101,22 @@ impl MoveGen {
 //move gen
 impl MoveGen {
   fn pawn_default(&self, at_mask: u64) -> u64 {
+    let non_promoting_mask = 0x00_FF_FF_FF_FF_FF_FF_00;
     let default = if_mask(
       self.white_turn_mask,
       at_mask.move_up_mask(1),
       at_mask.move_down_mask(1),
     );
 
-    default & self.empty
+    default & self.empty & non_promoting_mask
   }
 
   fn pawn_advance(&self, at_mask: u64) -> u64 {
-    let default = self.pawn_default(at_mask);
-
-    let can_default_mask = if_mask(
+    let non_promoting_mask = 0x00_FF_FF_FF_FF_FF_FF_00;
+    let default = if_mask(
       self.white_turn_mask,
-      default.move_up_mask(1),
-      default.move_down_mask(1),
-    );
-    let can_advance_mask = if_mask(
-      self.white_turn_mask,
-      self.advance_mask.move_up_mask(2),
-      self.advance_mask.move_down_mask(2),
+      at_mask.move_up_mask(1),
+      at_mask.move_down_mask(1),
     );
     let advance = if_mask(
       self.white_turn_mask,
@@ -128,10 +124,13 @@ impl MoveGen {
       at_mask.move_down_mask(2),
     );
 
-    advance & self.empty & can_advance_mask & can_default_mask
+    let can_default = default & self.empty > 0;
+    let can_advance = advance & self.empty > 0 && self.advance_mask & at_mask > 0;
+
+    advance & mask_from_bool(can_default && can_advance) & non_promoting_mask
   }
 
-  fn pawn_capturing(&self, at_mask: u64) -> u64 {
+  fn pawn_capture(&self, at_mask: u64) -> u64 {
     let one_move_up = at_mask.move_up_mask(1);
     let one_move_down = at_mask.move_down_mask(1);
 
@@ -147,6 +146,26 @@ impl MoveGen {
     );
 
     (enemy_to_left | enemy_to_right) & (self.enemy | self.en_passant_mask)
+  }
+
+  fn pawn_promote(&self, at_mask: u64) -> u64 {
+    let promoting_mask = 0xFF_00_00_00_00_00_00_FF;
+    let default = if_mask(
+      self.white_turn_mask,
+      at_mask.move_up_mask(1),
+      at_mask.move_down_mask(1),
+    );
+    let advance = if_mask(
+      self.white_turn_mask,
+      at_mask.move_up_mask(2),
+      at_mask.move_down_mask(2),
+    );
+
+    let can_default = default & self.empty > 0;
+    let can_advance = advance & self.empty > 0 && self.advance_mask & at_mask > 0;
+
+    (default & mask_from_bool(can_default) | advance & mask_from_bool(can_default && can_advance))
+      & promoting_mask
   }
 
   fn knight(&self, at_mask: u64) -> u64 {
@@ -266,17 +285,15 @@ impl MoveGen {
     let long_rook = rooks & at_mask.move_left_mask(4);
     let king_danger = self.king_danger();
 
-    let long_rights = self.castling_mask & long_rook > 0 && self.castling_mask & at_mask > 0;
+    let long_rights = self.castle_mask & long_rook > 0 && self.castle_mask & at_mask > 0;
     let long_empty = at_mask
       & self.empty.move_right_mask(1)
       & self.empty.move_right_mask(2)
       & self.empty.move_right_mask(3)
       > 0;
-    let long_safe = at_mask
-      & !king_danger
-      & !king_danger.move_right_mask(1)
-      & !king_danger.move_right_mask(2)
-      > 0;
+    let long_safe =
+      at_mask & !king_danger & !king_danger.move_right_mask(1) & !king_danger.move_right_mask(2)
+        > 0;
 
     let new_pos = at_mask.move_left_mask(2);
     new_pos & mask_from_bool(long_rights && long_empty && long_safe)
@@ -287,19 +304,15 @@ impl MoveGen {
     let short_rook = rooks & at_mask.move_right_mask(3);
     let king_danger = self.king_danger();
 
-    let short_rights = self.castling_mask & short_rook > 0 && self.castling_mask & at_mask > 0;
+    let short_rights = self.castle_mask & short_rook > 0 && self.castle_mask & at_mask > 0;
     let short_empty = at_mask & self.empty.move_left_mask(1) & self.empty.move_left_mask(2) > 0;
-    let short_safe = at_mask
-      & !king_danger
-      & !king_danger.move_left_mask(1)
-      & !king_danger.move_left_mask(2)
-      > 0;
+    let short_safe =
+      at_mask & !king_danger & !king_danger.move_left_mask(1) & !king_danger.move_left_mask(2) > 0;
 
     let new_pos = at_mask.move_right_mask(2);
     new_pos & mask_from_bool(short_rights && short_empty && short_safe)
   }
 }
-
 
 //other
 impl MoveGen {
@@ -339,7 +352,7 @@ impl MoveGen {
   fn check_filter(&self, at_mask: u64) -> u64 {
     let ally_king = self.kings & self.ally;
     let mut filter = 0;
-    filter |= self.pawn_capturing(ally_king) & (self.pawns & self.enemy);
+    filter |= self.pawn_capture(ally_king) & (self.pawns & self.enemy);
     filter |= self.knight(ally_king) & (self.knights & self.enemy);
     filter |= mask_from_bool(at_mask == ally_king);
 
@@ -375,7 +388,7 @@ impl MoveGen {
     self.save();
 
     self.empty_is_enemy();
-    king_danger |= self.pawn_capturing(self.pawns & self.ally);
+    king_danger |= self.pawn_capture(self.pawns & self.ally);
     king_danger |= self.knight(self.knights & self.ally);
     king_danger |= self.king_default(self.kings & self.ally);
 
@@ -394,7 +407,7 @@ impl MoveGen {
     let checked = self.king_danger() & (self.kings & self.ally) > 0;
     let moves = self.pawn_default(self.pawns & self.ally)
       | self.pawn_advance(self.pawns & self.ally)
-      | self.pawn_capturing(self.pawns & self.ally)
+      | self.pawn_capture(self.pawns & self.ally)
       | self.knight(self.knights & self.ally)
       | self.bishop((self.queens | self.bishops) & self.ally)
       | self.rook((self.queens | self.rooks) & self.ally)
@@ -467,7 +480,11 @@ impl MoveGen {
 #[cfg(test)]
 mod tests {
   mod pawn {
-    use crate::board::{Board, move_gen::MoveGen, move_input::MoveInput};
+    use crate::board::{
+      Board,
+      move_gen::MoveGen,
+      move_input::{BISHOP, KNIGHT, MoveInput, NONE, QUEEN, ROOK},
+    };
 
     #[test]
     fn default() {
@@ -493,6 +510,22 @@ mod tests {
       assert_eq!(movegen.pawn_default(0x00_80_00_00_00_00_00_00), 0);
       movegen.switch_turn();
       assert_eq!(movegen.pawn_default(0x00_00_00_00_00_00_80_00), 0);
+    }
+
+    #[test]
+    fn default_promotion() {
+      let board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+
+      assert_eq!(
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
+        0
+      );
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_default(0x00_90_00_00_00_00_00_00),
+        0
+      );
     }
 
     #[test]
@@ -532,17 +565,17 @@ mod tests {
     }
 
     #[test]
-    fn capturing() {
+    fn capture() {
       let board = Board::from_fen("k7/1p6/P1P5/8/8/p1p5/1P6/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
       assert_eq!(
-        movegen.pawn_capturing(0x00_40_00_00_00_00_00_00),
+        movegen.pawn_capture(0x00_40_00_00_00_00_00_00),
         0x00_00_A0_00_00_00_00_00
       );
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_capturing(0x00_00_00_00_00_00_40_00),
+        movegen.pawn_capture(0x00_00_00_00_00_00_40_00),
         0x00_00_00_00_00_A0_00_00
       );
     }
@@ -553,7 +586,7 @@ mod tests {
       board.move_piece(MoveInput::from_id(55, 39));
       let movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_capturing(0x00_00_00_40_00_00_00_00),
+        movegen.pawn_capture(0x00_00_00_40_00_00_00_00),
         0x00_00_80_00_00_00_00_00
       );
 
@@ -561,9 +594,180 @@ mod tests {
       board.move_piece(MoveInput::from_id(15, 31));
       let movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_capturing(0x00_00_00_00_40_00_00_00),
+        movegen.pawn_capture(0x00_00_00_00_40_00_00_00),
         0x00_00_00_00_00_80_00_00
       );
+    }
+
+    #[test]
+    fn promote_to_knight() {
+      let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_00_00_00_80
+      );
+
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        0x80_00_00_00_00_00_00_00
+      );
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_00_00_00_00_00_80_00,
+        0x00_00_00_00_00_00_00_80,
+        KNIGHT,
+      ));
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_80_00_00_00_00_00_00,
+        0x80_00_00_00_00_00_00_00,
+        KNIGHT,
+      ));
+
+      let movegen = MoveGen::default(&board);
+      assert_eq!(movegen.pawns, 0);
+      assert_eq!(movegen.knights & movegen.ally, 0x00_00_00_00_00_00_00_80);
+      assert_eq!(movegen.knights & movegen.enemy, 0x80_00_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn promote_to_bishop() {
+      let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_00_00_00_80
+      );
+
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        0x80_00_00_00_00_00_00_00
+      );
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_00_00_00_00_00_80_00,
+        0x00_00_00_00_00_00_00_80,
+        BISHOP,
+      ));
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_80_00_00_00_00_00_00,
+        0x80_00_00_00_00_00_00_00,
+        BISHOP,
+      ));
+
+      let movegen = MoveGen::default(&board);
+      assert_eq!(movegen.pawns, 0);
+      assert_eq!(movegen.bishops & movegen.ally, 0x00_00_00_00_00_00_00_80);
+      assert_eq!(movegen.bishops & movegen.enemy, 0x80_00_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn promote_to_rook() {
+      let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_00_00_00_80
+      );
+
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        0x80_00_00_00_00_00_00_00
+      );
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_00_00_00_00_00_80_00,
+        0x00_00_00_00_00_00_00_80,
+        ROOK,
+      ));
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_80_00_00_00_00_00_00,
+        0x80_00_00_00_00_00_00_00,
+        ROOK,
+      ));
+
+      let movegen = MoveGen::default(&board);
+      assert_eq!(movegen.pawns, 0);
+      assert_eq!(movegen.rooks & movegen.ally, 0x00_00_00_00_00_00_00_80);
+      assert_eq!(movegen.rooks & movegen.enemy, 0x80_00_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn promote_to_queen() {
+      let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
+      let mut movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_00_00_00_80
+      );
+
+      movegen.switch_turn();
+      assert_eq!(
+        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        0x80_00_00_00_00_00_00_00
+      );
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_00_00_00_00_00_80_00,
+        0x00_00_00_00_00_00_00_80,
+        QUEEN,
+      ));
+
+      board.move_piece(MoveInput::with_promotion(
+        0x00_80_00_00_00_00_00_00,
+        0x80_00_00_00_00_00_00_00,
+        QUEEN,
+      ));
+
+      let movegen = MoveGen::default(&board);
+      assert_eq!(movegen.pawns, 0);
+      assert_eq!(movegen.queens & movegen.ally, 0x00_00_00_00_00_00_00_80);
+      assert_eq!(movegen.queens & movegen.enemy, 0x80_00_00_00_00_00_00_00);
+    }
+
+    #[test]
+    fn promote_no_choice() {
+      let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
+      let movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        0x00_00_00_00_00_00_00_80
+      );
+      board.move_piece(MoveInput::with_promotion(
+        0x00_00_00_00_00_00_80_00,
+        0x00_00_00_00_00_00_00_80,
+        NONE,
+      ));
+      let movegen = MoveGen::default(&board);
+      assert_eq!(movegen.pawns & movegen.ally, 0x00_00_00_00_00_00_80_00);
+      assert_eq!(movegen.knights, 0);
+      assert_eq!(movegen.bishops, 0);
+      assert_eq!(movegen.rooks, 0);
+      assert_eq!(movegen.queens, 0);
+
+      let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 b - - 0 1");
+      let movegen = MoveGen::default(&board);
+      assert_eq!(
+        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        0x80_00_00_00_00_00_00_00
+      );
+      board.move_piece(MoveInput::with_promotion(
+        0x00_80_00_00_00_00_00_00,
+        0x80_00_00_00_00_00_00_00,
+        NONE,
+      ));
+      let movegen = MoveGen::default(&board);
+      assert_eq!(movegen.pawns & movegen.ally, 0x00_80_00_00_00_00_00_00);
+      assert_eq!(movegen.knights, 0);
+      assert_eq!(movegen.bishops, 0);
+      assert_eq!(movegen.rooks, 0);
+      assert_eq!(movegen.queens, 0);
     }
 
     #[test]
@@ -583,7 +787,7 @@ mod tests {
         movegen.pawn_advance(white_pawn) & filter,
         0x00_00_00_80_00_00_00_00
       );
-      assert_eq!(movegen.pawn_capturing(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capture(white_pawn) & filter, 0);
 
       movegen.switch_turn();
 
@@ -599,7 +803,7 @@ mod tests {
         movegen.pawn_advance(black_pawn) & filter,
         0x00_00_00_00_01_00_00_00
       );
-      assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capture(black_pawn) & filter, 0);
     }
 
     #[test]
@@ -613,7 +817,7 @@ mod tests {
       assert_eq!(filter, 0x3F_00_00_00_00_00_00_00);
       assert_eq!(movegen.pawn_default(white_pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(white_pawn) & filter, 0);
-      assert_eq!(movegen.pawn_capturing(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capture(white_pawn) & filter, 0);
 
       movegen.switch_turn();
 
@@ -623,7 +827,7 @@ mod tests {
       assert_eq!(filter, 0x00_00_00_00_00_00_00_3F);
       assert_eq!(movegen.pawn_default(black_pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(black_pawn) & filter, 0);
-      assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capture(black_pawn) & filter, 0);
     }
 
     #[test]
@@ -637,7 +841,7 @@ mod tests {
       assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
       assert_eq!(movegen.pawn_default(white_pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(white_pawn) & filter, 0);
-      assert_eq!(movegen.pawn_capturing(white_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capture(white_pawn) & filter, 0);
 
       movegen.switch_turn();
 
@@ -647,7 +851,7 @@ mod tests {
       assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
       assert_eq!(movegen.pawn_default(black_pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(black_pawn) & filter, 0);
-      assert_eq!(movegen.pawn_capturing(black_pawn) & filter, 0);
+      assert_eq!(movegen.pawn_capture(black_pawn) & filter, 0);
     }
 
     #[test]
@@ -658,7 +862,10 @@ mod tests {
       let pawn = movegen.pawns & movegen.ally;
       let filter = movegen.check_filter(pawn);
 
-      assert_eq!(movegen.pawn_default(pawn) & filter, 0x00_00_40_00_00_00_00_00);
+      assert_eq!(
+        movegen.pawn_default(pawn) & filter,
+        0x00_00_40_00_00_00_00_00
+      );
       assert_eq!(movegen.pawn_advance(pawn) & filter, 0);
 
       movegen.switch_turn();
@@ -666,7 +873,10 @@ mod tests {
       let pawn = movegen.pawns & movegen.ally;
       let filter = movegen.check_filter(pawn);
 
-      assert_eq!(movegen.pawn_default(pawn) & filter, 0x00_00_00_00_00_40_00_00);
+      assert_eq!(
+        movegen.pawn_default(pawn) & filter,
+        0x00_00_00_00_00_40_00_00
+      );
       assert_eq!(movegen.pawn_advance(pawn) & filter, 0);
     }
 
@@ -812,7 +1022,7 @@ mod tests {
 
       movegen.switch_turn();
 
-      let knight =  0x00_00_00_00_00_00_00_20;
+      let knight = 0x00_00_00_00_00_00_00_20;
       let filter = movegen.pin_filter(knight) & movegen.check_filter(knight);
 
       assert_eq!(movegen.knight(knight) & filter, 0);
@@ -896,10 +1106,7 @@ mod tests {
       let filter = movegen.pin_filter(bishop);
 
       assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
-      assert_eq!(
-        movegen.bishop(bishop) & filter,
-        0x00_00_20_10_08_04_02_01
-      );
+      assert_eq!(movegen.bishop(bishop) & filter, 0x00_00_20_10_08_04_02_01);
 
       movegen.switch_turn();
 
@@ -907,10 +1114,7 @@ mod tests {
       let filter = movegen.pin_filter(bishop);
 
       assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
-      assert_eq!(
-        movegen.bishop(bishop) & filter,
-        0x01_02_04_08_10_20_00_00
-      );
+      assert_eq!(movegen.bishop(bishop) & filter, 0x01_02_04_08_10_20_00_00);
     }
 
     #[test]
@@ -943,7 +1147,7 @@ mod tests {
 
       movegen.switch_turn();
 
-      let bishop =  0x00_00_00_00_00_00_00_20;
+      let bishop = 0x00_00_00_00_00_00_00_20;
       let filter = movegen.pin_filter(bishop) & movegen.check_filter(bishop);
 
       assert_eq!(movegen.bishop(bishop) & filter, 0);
@@ -1112,10 +1316,7 @@ mod tests {
       let filter = movegen.pin_filter(queen);
 
       assert_eq!(filter, 0x01_01_01_01_01_01_00_00);
-      assert_eq!(
-        movegen.queen(queen) & filter,
-        0x01_01_01_01_01_01_00_00
-      );
+      assert_eq!(movegen.queen(queen) & filter, 0x01_01_01_01_01_01_00_00);
 
       movegen.switch_turn();
 
@@ -1123,10 +1324,7 @@ mod tests {
       let filter = movegen.pin_filter(queen);
 
       assert_eq!(filter, 0x80_80_80_80_80_80_00_00);
-      assert_eq!(
-        movegen.queen(queen) & filter,
-        0x80_80_80_80_80_80_00_00
-      );
+      assert_eq!(movegen.queen(queen) & filter, 0x80_80_80_80_80_80_00_00);
     }
 
     #[test]
@@ -1138,10 +1336,7 @@ mod tests {
       let filter = movegen.pin_filter(queen);
 
       assert_eq!(filter, 0x3F_00_00_00_00_00_00_00);
-      assert_eq!(
-        movegen.queen(queen) & filter,
-        0x3F_00_00_00_00_00_00_00
-      );
+      assert_eq!(movegen.queen(queen) & filter, 0x3F_00_00_00_00_00_00_00);
 
       movegen.switch_turn();
 
@@ -1149,10 +1344,7 @@ mod tests {
       let filter = movegen.pin_filter(queen);
 
       assert_eq!(filter, 0x00_00_00_00_00_00_00_3F);
-      assert_eq!(
-        movegen.queen(queen) & filter,
-        0x00_00_00_00_00_00_00_3F
-      );
+      assert_eq!(movegen.queen(queen) & filter, 0x00_00_00_00_00_00_00_3F);
     }
 
     #[test]
@@ -1164,10 +1356,7 @@ mod tests {
       let filter = movegen.pin_filter(queen);
 
       assert_eq!(filter, 0x00_00_20_10_08_04_02_01);
-      assert_eq!(
-        movegen.queen(queen) & filter,
-        0x00_00_20_10_08_04_02_01
-      );
+      assert_eq!(movegen.queen(queen) & filter, 0x00_00_20_10_08_04_02_01);
 
       movegen.switch_turn();
 
@@ -1175,10 +1364,7 @@ mod tests {
       let filter = movegen.pin_filter(queen);
 
       assert_eq!(filter, 0x01_02_04_08_10_20_00_00);
-      assert_eq!(
-        movegen.queen(queen) & filter,
-        0x01_02_04_08_10_20_00_00
-      );
+      assert_eq!(movegen.queen(queen) & filter, 0x01_02_04_08_10_20_00_00);
     }
 
     #[test]
