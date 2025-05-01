@@ -76,6 +76,7 @@ impl MoveGen {
     let filter = pin & check;
 
     let mut moves = CachedPieceMoves {
+      from_mask: at_mask,
       pawn_default: movegen.pawn_default(at_mask & movegen.pawns & movegen.ally) & filter,
       pawn_advance: movegen.pawn_advance(at_mask & movegen.pawns & movegen.ally) & filter,
       pawn_capture: movegen.pawn_capture(at_mask & movegen.pawns & movegen.ally) & filter,

@@ -3,13 +3,29 @@ mod board_assets;
 mod board_position_lookup;
 
 use bevy::{prelude::*, window::PrimaryWindow};
-use board::{Board, MoveInput};
-use board_assets::{BoardAssets, PieceTag};
-use board_position_lookup::{X_LOOKUP, Y_LOOKUP};
+use board::{Board, move_input::MoveInput};
+use board_assets::{BoardAssets, PieceTag, PromotionTag};
+use board_position_lookup::{CENTER_LOOKUP, X_LOOKUP, Y_LOOKUP};
 
-#[derive(Resource)]
-struct SelectedPiece {
-  data: Option<(Entity, usize)>,
+#[derive(Resource, Default)]
+enum DrawMode {
+  #[default]
+  SelectPiece,
+  DrawMoves,
+  DragPiece,
+  DrawPromotion,
+  SelectPromotion,
+  MakeMove,
+  Reset,
+}
+
+#[derive(Resource, Default)]
+struct State {
+  mode: DrawMode,
+  entity: Option<Entity>,
+  selected_from: Option<usize>,
+  selected_to: Option<usize>,
+  selected_promotion: Option<u64>,
 }
 
 #[derive(Resource, Default)]
@@ -36,7 +52,7 @@ fn main() {
   App::new()
     .add_plugins(plugins)
     .add_systems(Startup, (setup, initial_draw).chain())
-    .add_systems(Update, (update_mouse_data, make_move, draw).chain())
+    .add_systems(Update, (update_mouse_data, update_state, draw).chain())
     .run();
 }
 
@@ -45,8 +61,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
   commands.insert_resource(Board::default());
   commands.insert_resource(MouseData::default());
-  commands.insert_resource(SelectedPiece { data: None });
   commands.insert_resource(BoardAssets::new(asset_server));
+  commands.insert_resource(State::default());
 }
 
 fn initial_draw(mut commands: Commands, mut assets: ResMut<BoardAssets>, board: Res<Board>) {
@@ -54,56 +70,45 @@ fn initial_draw(mut commands: Commands, mut assets: ResMut<BoardAssets>, board: 
   assets.draw_pieces(&mut commands, &board);
 }
 
-fn make_move(
-  mouse: Res<MouseData>,
-  mut board: ResMut<Board>,
-  mut selected_piece: ResMut<SelectedPiece>,
-) {
-  let to = mouse.board_pos;
-
-  if let Some((_, from)) = selected_piece.data {
-    if mouse.just_released {
-      board.move_piece(MoveInput::from_id(from, to));
-      selected_piece.data = None;
-    }
-  }
-}
-
 fn draw(
   mut commands: Commands,
   mouse: Res<MouseData>,
   board: Res<Board>,
-  mut selected_piece: ResMut<SelectedPiece>,
+  state: Res<State>,
   mut assets: ResMut<BoardAssets>,
   mut sprite_query: Query<(Entity, &mut Transform, &PieceTag), With<PieceTag>>,
 ) {
-  let at_mask = 1 << mouse.board_pos;
-
-  if mouse.just_released {
-    assets.remove_moves(&mut commands);
-    assets.remove_pieces(&mut commands);
-    assets.draw_pieces(&mut commands, &board);
-  } else if mouse.just_pressed {
-    let correct_turn = board.white_turn == board.is_white(at_mask) 
-      || board.white_turn == board.is_black(at_mask);
-    if !correct_turn {
-      return;
+  match state.mode {
+    DrawMode::DrawMoves => {
+      assets.draw_moves(&mut commands, &board);
     }
-
-    for (entity, _, tag) in &sprite_query {
-      if mouse.board_pos == tag.0 {
-        selected_piece.data = Some((entity, tag.0));
-        assets.draw_moves(&mut commands, &board, at_mask);
+    DrawMode::DragPiece => {
+      if let Some(entity) = state.entity {
+        if let Ok((_, mut transform, _)) = sprite_query.get_mut(entity) {
+          transform.translation.x = mouse.x;
+          transform.translation.y = mouse.y;
+          transform.translation.z = 1.0;
+        }
       }
     }
-  } else if mouse.being_pressed {
-    if let Some((entity, _)) = selected_piece.data {
-      if let Ok((_, mut transform, _)) = sprite_query.get_mut(entity) {
-        transform.translation.x = mouse.x;
-        transform.translation.y = mouse.y;
-        transform.translation.z = 1.0;
+    DrawMode::DrawPromotion => {
+      if let Some(entity) = state.entity {
+        if let Ok((_, mut transform, _)) = sprite_query.get_mut(entity) {
+          transform.translation.z = -transform.translation.z;
+        }
+      }
+
+      if let Some(from_mask) = state.selected_from {
+        assets.draw_promotion(&mut commands, &board, from_mask);
       }
     }
+    DrawMode::Reset => {
+      assets.remove_moves(&mut commands);
+      assets.remove_promotion(&mut commands);
+      assets.remove_pieces(&mut commands);
+      assets.draw_pieces(&mut commands, &board);
+    }
+    _ => {}
   }
 }
 
@@ -133,4 +138,76 @@ fn update_mouse_data(
       return;
     }
   }
+}
+
+fn update_state(
+  mouse: Res<MouseData>,
+  mut state: ResMut<State>,
+  mut board: ResMut<Board>,
+  pieces: Query<(Entity, &mut Transform), With<PieceTag>>,
+  promotions: Query<(&Transform, &PromotionTag), (With<PromotionTag>, Without<PieceTag>)>,
+) {
+  match state.mode {
+    DrawMode::SelectPiece if mouse.just_pressed => {
+      state.selected_from = Some(mouse.board_pos);
+      let from_mask = 1 << mouse.board_pos;
+      board.update_cache(from_mask);
+
+      for (entity, transform) in pieces.iter() {
+        if transform.translation.truncate() == CENTER_LOOKUP[mouse.board_pos].truncate() {
+          state.entity = Some(entity);
+          break;
+        }
+      }
+      state.mode = DrawMode::DrawMoves;
+    }
+    DrawMode::DrawMoves => {
+      state.mode = DrawMode::DragPiece;
+    }
+    DrawMode::DragPiece if mouse.just_released => {
+      state.selected_to = Some(mouse.board_pos);
+
+      let to_mask = 1 << mouse.board_pos;
+      if board.is_promotion(to_mask) {
+        state.mode = DrawMode::DrawPromotion;
+      } else {
+        state.mode = DrawMode::MakeMove;
+        state.selected_promotion = Some(0);
+      }
+    }
+    DrawMode::DrawPromotion => {
+      state.mode = DrawMode::SelectPromotion;
+    }
+    DrawMode::SelectPromotion if mouse.just_released => {
+      for (transform, tag) in promotions.iter() {
+        if transform.translation.truncate() == CENTER_LOOKUP[mouse.board_pos].truncate() {
+          state.selected_promotion = Some(tag.0);
+        }
+      }
+
+      if state.selected_promotion.is_some() {
+        state.mode = DrawMode::MakeMove;
+      } else {
+        state.mode = DrawMode::Reset;
+      }
+    }
+    DrawMode::MakeMove => {
+      if let Some(from) = state.selected_from {
+        if let Some(to) = state.selected_to {
+          if let Some(promotion) = state.selected_promotion {
+            board.move_piece(MoveInput {
+              from: 1 << from,
+              to: 1 << to,
+              promotion,
+            });
+          }
+        }
+      }
+      state.mode = DrawMode::Reset;
+    }
+    DrawMode::Reset => {
+      std::mem::take(&mut *state);
+    }
+    _ => {}
+  };
 }

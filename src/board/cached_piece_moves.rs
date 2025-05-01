@@ -1,5 +1,6 @@
 #[derive(Default)]
 pub struct CachedPieceMoves {
+  pub from_mask: u64,
   pub pawn_default: u64,
   pub pawn_advance: u64,
   pub pawn_capture: u64,
