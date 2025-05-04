@@ -80,7 +80,6 @@ impl MoveGen {
       pawn_default: movegen.pawn_default(at_mask & movegen.pawns & movegen.ally) & filter,
       pawn_advance: movegen.pawn_advance(at_mask & movegen.pawns & movegen.ally) & filter,
       pawn_capture: movegen.pawn_capture(at_mask & movegen.pawns & movegen.ally) & filter,
-      pawn_promote: movegen.pawn_promote(at_mask & movegen.pawns & movegen.ally) & filter,
       knight: movegen.knight(at_mask & movegen.knights & movegen.ally) & filter,
       bishop: movegen.bishop(at_mask & movegen.bishops & movegen.ally) & filter,
       rook: movegen.rook(at_mask & movegen.rooks & movegen.ally) & filter,
@@ -102,18 +101,16 @@ impl MoveGen {
 //move gen
 impl MoveGen {
   fn pawn_default(&self, at_mask: u64) -> u64 {
-    let non_promoting_mask = 0x00_FF_FF_FF_FF_FF_FF_00;
     let default = if_mask(
       self.white_turn_mask,
       at_mask.move_up_mask(1),
       at_mask.move_down_mask(1),
     );
 
-    default & self.empty & non_promoting_mask
+    default & self.empty
   }
 
   fn pawn_advance(&self, at_mask: u64) -> u64 {
-    let non_promoting_mask = 0x00_FF_FF_FF_FF_FF_FF_00;
     let default = if_mask(
       self.white_turn_mask,
       at_mask.move_up_mask(1),
@@ -128,7 +125,7 @@ impl MoveGen {
     let can_default = default & self.empty > 0;
     let can_advance = advance & self.empty > 0 && self.advance_mask & at_mask > 0;
 
-    advance & mask_from_bool(can_default && can_advance) & non_promoting_mask
+    advance & mask_from_bool(can_default && can_advance)
   }
 
   fn pawn_capture(&self, at_mask: u64) -> u64 {
@@ -147,26 +144,6 @@ impl MoveGen {
     );
 
     (enemy_to_left | enemy_to_right) & (self.enemy | self.en_passant_mask)
-  }
-
-  fn pawn_promote(&self, at_mask: u64) -> u64 {
-    let promoting_mask = 0xFF_00_00_00_00_00_00_FF;
-    let default = if_mask(
-      self.white_turn_mask,
-      at_mask.move_up_mask(1),
-      at_mask.move_down_mask(1),
-    );
-    let advance = if_mask(
-      self.white_turn_mask,
-      at_mask.move_up_mask(2),
-      at_mask.move_down_mask(2),
-    );
-
-    let can_default = default & self.empty > 0;
-    let can_advance = advance & self.empty > 0 && self.advance_mask & at_mask > 0;
-
-    (default & mask_from_bool(can_default) | advance & mask_from_bool(can_default && can_advance))
-      & promoting_mask
   }
 
   fn knight(&self, at_mask: u64) -> u64 {
@@ -514,22 +491,6 @@ mod tests {
     }
 
     #[test]
-    fn default_promotion() {
-      let board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
-      let mut movegen = MoveGen::default(&board);
-
-      assert_eq!(
-        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
-        0
-      );
-      movegen.switch_turn();
-      assert_eq!(
-        movegen.pawn_default(0x00_90_00_00_00_00_00_00),
-        0
-      );
-    }
-
-    #[test]
     fn advance() {
       let board = Board::from_fen("k7/p7/8/8/8/8/P7/K7 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
@@ -605,13 +566,13 @@ mod tests {
       let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
         0x00_00_00_00_00_00_00_80
       );
 
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        movegen.pawn_default(0x00_80_00_00_00_00_00_00),
         0x80_00_00_00_00_00_00_00
       );
 
@@ -638,13 +599,13 @@ mod tests {
       let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
         0x00_00_00_00_00_00_00_80
       );
 
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        movegen.pawn_default(0x00_80_00_00_00_00_00_00),
         0x80_00_00_00_00_00_00_00
       );
 
@@ -671,13 +632,13 @@ mod tests {
       let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
         0x00_00_00_00_00_00_00_80
       );
 
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        movegen.pawn_default(0x00_80_00_00_00_00_00_00),
         0x80_00_00_00_00_00_00_00
       );
 
@@ -704,13 +665,13 @@ mod tests {
       let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
       let mut movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
         0x00_00_00_00_00_00_00_80
       );
 
       movegen.switch_turn();
       assert_eq!(
-        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        movegen.pawn_default(0x00_80_00_00_00_00_00_00),
         0x80_00_00_00_00_00_00_00
       );
 
@@ -737,7 +698,7 @@ mod tests {
       let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 w - - 0 1");
       let movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_promote(0x00_00_00_00_00_00_80_00),
+        movegen.pawn_default(0x00_00_00_00_00_00_80_00),
         0x00_00_00_00_00_00_00_80
       );
       board.move_piece(MoveInput::with_promotion(
@@ -755,7 +716,7 @@ mod tests {
       let mut board = Board::from_fen("8/PK6/8/8/8/8/pk6/8 b - - 0 1");
       let movegen = MoveGen::default(&board);
       assert_eq!(
-        movegen.pawn_promote(0x00_80_00_00_00_00_00_00),
+        movegen.pawn_default(0x00_80_00_00_00_00_00_00),
         0x80_00_00_00_00_00_00_00
       );
       board.move_piece(MoveInput::with_promotion(

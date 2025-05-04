@@ -285,14 +285,15 @@ impl Board {
     self.white.move_piece(from_mask, move_mask);
     self.black.move_piece(from_mask, move_mask);
 
-    let knight_promotion =
-      mask_from_bool(self.cached_moves.pawn_promote > 0 && promotion_choice == KNIGHT);
-    let bishop_promotion =
-      mask_from_bool(self.cached_moves.pawn_promote > 0 && promotion_choice == BISHOP);
-    let rook_promotion =
-      mask_from_bool(self.cached_moves.pawn_promote > 0 && promotion_choice == ROOK);
-    let queen_promotion =
-      mask_from_bool(self.cached_moves.pawn_promote > 0 && promotion_choice == QUEEN);
+    let pawn_moves =
+      self.cached_moves.pawn_default | self.cached_moves.pawn_advance | self.cached_moves.capturing;
+    let promoting_mask = 0xFF_00_00_00_00_00_00_FF;
+    let promoted = pawn_moves & promoting_mask > 0;
+
+    let knight_promotion = mask_from_bool(promoted && promotion_choice == KNIGHT);
+    let bishop_promotion = mask_from_bool(promoted && promotion_choice == BISHOP);
+    let rook_promotion = mask_from_bool(promoted && promotion_choice == ROOK);
+    let queen_promotion = mask_from_bool(promoted && promotion_choice == QUEEN);
 
     self.white.promote_to_knight(knight_promotion & move_mask);
     self.white.promote_to_bishop(bishop_promotion & move_mask);
@@ -341,7 +342,10 @@ impl Board {
   }
 
   pub fn is_promotion(&self, to_mask: u64) -> bool {
-    self.cached_moves.pawn_promote & to_mask > 0
+    let pawn_moves =
+      self.cached_moves.pawn_default | self.cached_moves.pawn_advance | self.cached_moves.capturing;
+    let promoting_mask = 0xFF_00_00_00_00_00_00_FF;
+    pawn_moves & promoting_mask & to_mask > 0
   }
 }
 

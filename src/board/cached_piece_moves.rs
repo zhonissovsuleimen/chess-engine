@@ -4,7 +4,6 @@ pub struct CachedPieceMoves {
   pub pawn_default: u64,
   pub pawn_advance: u64,
   pub pawn_capture: u64,
-  pub pawn_promote: u64,
   pub knight: u64,
   pub bishop: u64,
   pub rook: u64,
@@ -18,7 +17,7 @@ pub struct CachedPieceMoves {
 
 impl CachedPieceMoves {
   pub fn all(&self) -> u64 {
-    let pawn_moves = self.pawn_default | self.pawn_advance | self.pawn_capture | self.pawn_promote;
+    let pawn_moves = self.pawn_default | self.pawn_advance | self.pawn_capture;
     let knight_moves = self.knight;
     let bishop_moves = self.bishop;
     let rook_moves = self.rook;
