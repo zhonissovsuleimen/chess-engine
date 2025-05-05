@@ -21,23 +21,26 @@ pub struct Board {
   half_clock: u64,
   pub cached_moves: CachedPieceMoves,
 
-  pub(super) advance_mask: u64,
   pub(super) en_passant_mask: u64,
-  pub(super) castle_mask: u64,
+  pub(super) white_short_castle: bool,
+  pub(super) white_long_castle: bool,
+  pub(super) black_short_castle: bool,
+  pub(super) black_long_castle: bool,
 }
 
 //constructor
 impl Board {
   pub fn default() -> Board {
-    let mut board = Board {
+    Board {
       white: Pieces::white(),
       black: Pieces::black(),
 
+      white_short_castle: true,
+      white_long_castle: true,
+      black_short_castle: true,
+      black_long_castle: true,
       ..Board::empty()
-    };
-
-    board.initialize_masks();
-    board
+    }
   }
 
   pub fn empty() -> Board {
@@ -50,9 +53,11 @@ impl Board {
       half_clock: 0,
       cached_moves: CachedPieceMoves::default(),
 
-      advance_mask: 0,
       en_passant_mask: 0,
-      castle_mask: 0,
+      white_short_castle: false,
+      white_long_castle: false,
+      black_short_castle: false,
+      black_long_castle: false,
     }
   }
 
@@ -107,10 +112,6 @@ impl Board {
       );
     }
 
-    //advance mask
-    board.advance_mask = board.white.pawns & 0x00_FF_00_00_00_00_00_00;
-    board.advance_mask |= board.black.pawns & 0x00_00_00_00_00_00_FF_00;
-
     //turn
     match slices[1] {
       "w" => board.white_turn = true,
@@ -126,10 +127,10 @@ impl Board {
 
       for c in chars {
         match c {
-          'K' => board.castle_mask |= 0x09_00_00_00_00_00_00_00,
-          'Q' => board.castle_mask |= 0x88_00_00_00_00_00_00_00,
-          'k' => board.castle_mask |= 0x00_00_00_00_00_00_00_09,
-          'q' => board.castle_mask |= 0x00_00_00_00_00_00_00_88,
+          'K' => board.white_short_castle = true,
+          'Q' => board.white_long_castle = true,
+          'k' => board.black_short_castle = true,
+          'q' => board.black_long_castle = true,
           wrong_char => {
             panic!("Unexpected character ({wrong_char}) in castling rights data")
           }
@@ -191,19 +192,13 @@ impl Board {
 
     //order matters
     self.handle_en_passant(move_mask);
-    self.handle_pawn_advance(from_mask, move_mask);
+    self.handle_pawn_advance(move_mask);
     self.handle_castling(from_mask, move_mask);
     self.handle_move(from_mask, move_mask, input.promotion);
 
     self.update_clocks(move_mask);
     self.white_turn ^= move_mask > 0;
     move_mask > 0
-  }
-
-  fn initialize_masks(&mut self) {
-    self.advance_mask = self.white.pawns | self.black.pawns;
-    self.en_passant_mask = 0;
-    self.castle_mask = self.white.king | self.white.rooks | self.black.king | self.black.rooks;
   }
 
   fn update_status(&mut self) {
@@ -244,38 +239,38 @@ impl Board {
     self.black.remove_piece(en_passanted_pawn);
   }
 
-  fn handle_pawn_advance(&mut self, from_mask: u64, move_mask: u64) {
-    let pawn_advance_move = self.cached_moves.pawn_advance;
-    let pawn_advanced = mask_from_bool(move_mask & pawn_advance_move > 0);
-    self.advance_mask &= !(pawn_advanced & from_mask);
+  fn handle_pawn_advance(&mut self, move_mask: u64) {
+    let pawn_advanced = move_mask & self.cached_moves.pawn_advance > 0;
+
     self.en_passant_mask = if_bool(
-      move_mask > 0,
-      if_bool(
-        self.white_turn,
-        pawn_advance_move.move_down_mask(1),
-        pawn_advance_move.move_up_mask(1),
-      ),
-      self.en_passant_mask,
-    );
+      self.white_turn,
+      move_mask.move_down_mask(1),
+      move_mask.move_up_mask(1),
+    ) & mask_from_bool(pawn_advanced);
   }
 
   fn handle_castling(&mut self, from_mask: u64, move_mask: u64) {
-    let king_move = self.cached_moves.king_default;
-    let rook_move = self.cached_moves.rook;
-    let revoke_castling_move = move_mask & (king_move | rook_move);
-    self.castle_mask &= !revoke_castling_move;
+    let white_king_moved = self.white_turn && move_mask & self.cached_moves.king_default > 0;
+    let white_long_rook_moved = self.white_turn
+      && move_mask & self.cached_moves.rook > 0
+      && from_mask == 0x80_00_00_00_00_00_00_00;
+    let white_short_rook_moved = self.white_turn
+      && move_mask & self.cached_moves.rook > 0
+      && from_mask == 0x01_00_00_00_00_00_00_00;
 
-    let long_castled = move_mask & self.cached_moves.king_long_castle;
-    let short_castled = move_mask & self.cached_moves.king_short_castle;
+    self.white_long_castle &= !(white_king_moved || white_long_rook_moved);
+    self.white_short_castle &= !(white_king_moved || white_short_rook_moved);
 
-    let rook_from = long_castled.move_left_mask(2) | short_castled.move_right_mask(1);
-    let rook_to = long_castled.move_right_mask(1) | short_castled.move_left_mask(1);
+    let black_king_moved = !self.white_turn && move_mask & self.cached_moves.king_default > 0;
+    let black_long_rook_moved = !self.white_turn
+      && move_mask & self.cached_moves.rook > 0
+      && from_mask == 0x00_00_00_00_00_00_00_80;
+    let black_short_rook_moved = !self.white_turn
+      && move_mask & self.cached_moves.rook > 0
+      && from_mask == 0x00_00_00_00_00_00_00_01;
 
-    self.white.move_piece(rook_from, rook_to);
-    self.black.move_piece(rook_from, rook_to);
-
-    let castled = mask_from_bool(long_castled | short_castled > 0);
-    self.castle_mask &= !(castled & from_mask);
+    self.black_long_castle &= !(black_king_moved || black_long_rook_moved);
+    self.black_short_castle &= !(black_king_moved || black_short_rook_moved);
   }
 
   fn handle_move(&mut self, from_mask: u64, move_mask: u64, promotion_choice: u64) {
@@ -378,7 +373,10 @@ mod tests {
 
       assert_eq!(board.advance_mask, 0x00_FF_00_00_00_00_FF_00);
       assert_eq!(board.en_passant_mask, 0x00_00_00_00_00_00_00_00);
-      assert_eq!(board.castle_mask, 0x89_00_00_00_00_00_00_89);
+      assert_eq!(board.white_long_castle, true);
+      assert_eq!(board.white_short_castle, true);
+      assert_eq!(board.black_long_castle, true);
+      assert_eq!(board.black_short_castle, true);
     }
 
     #[test]
@@ -406,7 +404,10 @@ mod tests {
 
       assert_eq!(a.advance_mask, b.advance_mask);
       assert_eq!(a.en_passant_mask, b.en_passant_mask);
-      assert_eq!(a.castle_mask, b.castle_mask);
+      assert_eq!(a.white_long_castle, b.white_long_castle);
+      assert_eq!(a.white_short_castle, b.white_short_castle);
+      assert_eq!(a.black_long_castle, b.black_long_castle);
+      assert_eq!(a.black_short_castle, b.black_short_castle);
     }
 
     #[test]

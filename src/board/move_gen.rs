@@ -23,9 +23,11 @@ pub struct MoveGen {
   queens: u64,
   kings: u64,
 
-  advance_mask: u64,
   en_passant_mask: u64,
-  castle_mask: u64,
+  pub(super) white_short_castle: bool,
+  pub(super) white_long_castle: bool,
+  pub(super) black_short_castle: bool,
+  pub(super) black_long_castle: bool,
 }
 
 //constructors
@@ -61,9 +63,11 @@ impl MoveGen {
       queens: board.queens(),
       kings: board.kings(),
 
-      advance_mask: board.advance_mask,
       en_passant_mask: board.en_passant_mask,
-      castle_mask: board.castle_mask,
+      white_short_castle: board.white_short_castle,
+      white_long_castle: board.white_long_castle,
+      black_short_castle: board.black_short_castle,
+      black_long_castle: board.black_short_castle,
     };
 
     movegen
@@ -87,8 +91,8 @@ impl MoveGen {
       king_default: movegen.king_default(at_mask & movegen.kings & movegen.ally)
         & !movegen.king_danger()
         & filter,
-      king_short_castle: movegen.king_short_castle(at_mask & movegen.kings & movegen.ally),
-      king_long_castle: movegen.king_long_castle(at_mask & movegen.kings & movegen.ally),
+      king_short_castle: movegen.king_short_castle(),
+      king_long_castle: movegen.king_long_castle(),
       capturing: 0,
       status: 0,
     };
@@ -121,9 +125,14 @@ impl MoveGen {
       at_mask.move_up_mask(2),
       at_mask.move_down_mask(2),
     );
+    let advance_mask = if_mask(
+      self.white_turn_mask,
+      0x00_FF_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_FF_00,
+    );
 
     let can_default = default & self.empty > 0;
-    let can_advance = advance & self.empty > 0 && self.advance_mask & at_mask > 0;
+    let can_advance = advance & self.empty > 0 && at_mask & advance_mask > 0;
 
     advance & mask_from_bool(can_default && can_advance)
   }
@@ -258,37 +267,82 @@ impl MoveGen {
     moves
   }
 
-  fn king_long_castle(&mut self, at_mask: u64) -> u64 {
-    let rooks = self.rooks & self.ally;
-    let long_rook = rooks & at_mask.move_left_mask(4);
+  fn king_long_castle(&mut self) -> u64 {
     let king_danger = self.king_danger();
+    let rook_u64 = if_mask(
+      self.white_turn_mask,
+      0x80_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_80,
+    );
+    let king_u64 = if_mask(
+      self.white_turn_mask,
+      0x08_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_08,
+    );
+    let empty_u64 = if_mask(
+      self.white_turn_mask,
+      0x70_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_70,
+    );
+    let safe_u64 = if_mask(
+      self.white_turn_mask,
+      0x38_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_38,
+    );
+    let new_pos_u64 = if_mask(
+      self.white_turn_mask,
+      0x20_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_20,
+    );
 
-    let long_rights = self.castle_mask & long_rook > 0 && self.castle_mask & at_mask > 0;
-    let long_empty = at_mask
-      & self.empty.move_right_mask(1)
-      & self.empty.move_right_mask(2)
-      & self.empty.move_right_mask(3)
-      > 0;
-    let long_safe =
-      at_mask & !king_danger & !king_danger.move_right_mask(1) & !king_danger.move_right_mask(2)
-        > 0;
+    let king = self.ally & self.kings == king_u64;
+    let rook = rook_u64 & self.rooks & self.ally > 0;
+    let empty = self.empty & empty_u64 == empty_u64;
+    let safe = !king_danger & safe_u64 == safe_u64;
 
-    let new_pos = at_mask.move_left_mask(2);
-    new_pos & mask_from_bool(long_rights && long_empty && long_safe)
+    let white_turn = self.white_turn_mask == 0xFF_FF_FF_FF_FF_FF_FF_FF;
+    let rights = (white_turn && self.white_long_castle) || (!white_turn && self.black_long_castle);
+
+    new_pos_u64 & mask_from_bool(rights && king && rook && empty && safe)
   }
 
-  fn king_short_castle(&mut self, at_mask: u64) -> u64 {
-    let rooks = self.rooks & self.ally;
-    let short_rook = rooks & at_mask.move_right_mask(3);
+  fn king_short_castle(&mut self) -> u64 {
     let king_danger = self.king_danger();
+    let rook_u64 = if_mask(
+      self.white_turn_mask,
+      0x01_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_01,
+    );
+    let king_u64 = if_mask(
+      self.white_turn_mask,
+      0x08_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_08,
+    );
+    let empty_u64 = if_mask(
+      self.white_turn_mask,
+      0x06_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_06,
+    );
+    let safe_u64 = if_mask(
+      self.white_turn_mask,
+      0x0E_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_0E,
+    );
+    let new_pos_u64 = if_mask(
+      self.white_turn_mask,
+      0x02_00_00_00_00_00_00_00,
+      0x00_00_00_00_00_00_00_02,
+    );
 
-    let short_rights = self.castle_mask & short_rook > 0 && self.castle_mask & at_mask > 0;
-    let short_empty = at_mask & self.empty.move_left_mask(1) & self.empty.move_left_mask(2) > 0;
-    let short_safe =
-      at_mask & !king_danger & !king_danger.move_left_mask(1) & !king_danger.move_left_mask(2) > 0;
+    let king = self.ally & self.kings == king_u64;
+    let rook = rook_u64 & self.rooks & self.ally > 0;
+    let empty = self.empty & empty_u64 == empty_u64;
+    let safe = !king_danger & safe_u64 == safe_u64;
 
-    let new_pos = at_mask.move_right_mask(2);
-    new_pos & mask_from_bool(short_rights && short_empty && short_safe)
+    let white_turn = self.white_turn_mask == 0xFF_FF_FF_FF_FF_FF_FF_FF;
+    let rights = (white_turn && self.white_short_castle) || (!white_turn && self.black_short_castle);
+
+    new_pos_u64 & mask_from_bool(rights && king && rook && empty && safe)
   }
 }
 
@@ -390,8 +444,8 @@ impl MoveGen {
       | self.bishop((self.queens | self.bishops) & self.ally)
       | self.rook((self.queens | self.rooks) & self.ally)
       | self.king_default(self.kings & self.ally)
-      | self.king_short_castle(self.kings & self.ally)
-      | self.king_long_castle(self.kings & self.ally);
+      | self.king_short_castle()
+      | self.king_long_castle();
 
     let no_moves = moves == 0;
     let winner = if_mask(self.white_turn_mask, BLACK_WON, WHITE_WON);
@@ -521,9 +575,11 @@ mod tests {
       let board = Board::from_fen("k7/8/p7/8/8/7P/8/7K w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      assert_eq!(movegen.pawn_advance(0x00_80_00_00_00_00_00_00), 0);
+      let pawn = movegen.pawns & movegen.ally;
+      assert_eq!(movegen.pawn_advance(pawn), 0);
       movegen.switch_turn();
-      assert_eq!(movegen.pawn_advance(0x00_00_00_00_00_00_80_00), 0);
+      let pawn = movegen.pawns & movegen.ally;
+      assert_eq!(movegen.pawn_advance(pawn), 0);
     }
 
     #[test]
@@ -1414,15 +1470,13 @@ mod tests {
       let board = Board::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0x20_00_00_00_00_00_00_00);
-      assert_eq!(movegen.king_short_castle(king), 0x02_00_00_00_00_00_00_00);
+      assert_eq!(movegen.king_long_castle(), 0x20_00_00_00_00_00_00_00);
+      assert_eq!(movegen.king_short_castle(), 0x02_00_00_00_00_00_00_00);
 
       movegen.switch_turn();
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0x00_00_00_00_00_00_00_20);
-      assert_eq!(movegen.king_short_castle(king), 0x00_00_00_00_00_00_00_02);
+      assert_eq!(movegen.king_long_castle(), 0x00_00_00_00_00_00_00_20);
+      assert_eq!(movegen.king_short_castle(), 0x00_00_00_00_00_00_00_02);
     }
 
     #[test]
@@ -1430,15 +1484,13 @@ mod tests {
       let board = Board::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
 
       movegen.switch_turn();
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
     }
 
     #[test]
@@ -1446,15 +1498,13 @@ mod tests {
       let board = Board::from_fen("r3k2r/8/2B5/8/8/2b5/8/R3K2R w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
 
       movegen.switch_turn();
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
     }
 
     #[test]
@@ -1462,15 +1512,13 @@ mod tests {
       let board = Board::from_fen("r3k2r/8/4B3/8/8/4b3/8/R3K2R w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
 
       movegen.switch_turn();
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
     }
 
     #[test]
@@ -1478,15 +1526,13 @@ mod tests {
       let board = Board::from_fen("r3k2r/4B3/8/8/8/8/4b3/R3K2R w - - 0 1");
       let mut movegen = MoveGen::default(&board);
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
 
       movegen.switch_turn();
 
-      let king = movegen.kings & movegen.ally;
-      assert_eq!(movegen.king_long_castle(king), 0);
-      assert_eq!(movegen.king_short_castle(king), 0);
+      assert_eq!(movegen.king_long_castle(), 0);
+      assert_eq!(movegen.king_short_castle(), 0);
     }
 
     #[test]
