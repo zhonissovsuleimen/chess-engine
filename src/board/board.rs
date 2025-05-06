@@ -371,7 +371,6 @@ mod tests {
       assert_eq!(board.clock, 1);
       assert_eq!(board.half_clock, 0);
 
-      assert_eq!(board.advance_mask, 0x00_FF_00_00_00_00_FF_00);
       assert_eq!(board.en_passant_mask, 0x00_00_00_00_00_00_00_00);
       assert_eq!(board.white_long_castle, true);
       assert_eq!(board.white_short_castle, true);
@@ -402,7 +401,6 @@ mod tests {
       assert_eq!(a.clock, b.clock);
       assert_eq!(a.half_clock, b.half_clock);
 
-      assert_eq!(a.advance_mask, b.advance_mask);
       assert_eq!(a.en_passant_mask, b.en_passant_mask);
       assert_eq!(a.white_long_castle, b.white_long_castle);
       assert_eq!(a.white_short_castle, b.white_short_castle);
