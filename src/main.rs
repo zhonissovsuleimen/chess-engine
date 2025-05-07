@@ -149,8 +149,13 @@ fn update_state(
 ) {
   match state.mode {
     DrawMode::SelectPiece if mouse.just_pressed => {
-      state.selected_from = Some(mouse.board_pos);
       let from_mask = 1 << mouse.board_pos;
+
+      if board.is_empty(from_mask) || board.white_turn != board.is_white(from_mask) {
+        return;
+      }
+
+      state.selected_from = Some(mouse.board_pos);
       board.update_cache(from_mask);
 
       for (entity, transform) in pieces.iter() {

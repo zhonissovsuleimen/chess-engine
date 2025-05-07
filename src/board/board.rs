@@ -328,6 +328,10 @@ impl Board {
     self.white.is_empty(at_mask) && self.black.is_empty(at_mask)
   }
 
+  pub fn is_white(&self, at_mask: u64) -> bool {
+    self.white.pieces_concat() & at_mask > 0
+  }
+
   pub fn is_promotion(&self, to_mask: u64) -> bool {
     let pawn_moves =
       self.cached_moves.pawn_default | self.cached_moves.pawn_advance | self.cached_moves.capturing;
