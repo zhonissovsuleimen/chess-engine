@@ -12,7 +12,6 @@ pub struct CachedPieceMoves {
   pub king_short_castle: u64,
   pub king_long_castle: u64,
   pub capturing: u64,
-  pub status: u64,
 }
 
 impl CachedPieceMoves {

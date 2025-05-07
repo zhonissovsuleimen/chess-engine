@@ -5,7 +5,7 @@ use super::{
   board_movement_trait::BoardMovement,
   cached_piece_moves::CachedPieceMoves,
   move_gen::MoveGen,
-  move_input::{BISHOP, KNIGHT, MoveInput, QUEEN, ROOK},
+  move_input::{MoveInput, BISHOP, KNIGHT, QUEEN, ROOK},
   pieces::Pieces,
   status::*,
   util_fns::*,
@@ -13,7 +13,6 @@ use super::{
 
 #[derive(Resource)]
 pub struct Board {
-  pub status: u64,
   pub white_turn: bool,
   pub white: Pieces,
   pub black: Pieces,
@@ -45,7 +44,6 @@ impl Board {
 
   pub fn empty() -> Board {
     Board {
-      status: PLAYING,
       white_turn: true,
       white: Pieces::empty(),
       black: Pieces::empty(),
@@ -185,10 +183,7 @@ impl Board {
     let to_mask: u64 = input.to;
 
     self.update_cache(from_mask);
-    self.update_status();
-    let playing = mask_from_bool(self.status == PLAYING);
-
-    let move_mask = to_mask & self.cached_moves.all() & playing;
+    let move_mask = to_mask & self.cached_moves.all();
 
     //order matters
     self.handle_en_passant(move_mask);
@@ -199,13 +194,6 @@ impl Board {
     self.update_clocks(move_mask);
     self.white_turn ^= move_mask > 0;
     move_mask > 0
-  }
-
-  fn update_status(&mut self) {
-    let piece_status = self.cached_moves.status;
-    let fifty_move = mask_from_bool(self.half_clock > 100);
-
-    self.status = (fifty_move & DRAW) | (!fifty_move & piece_status);
   }
 
   fn update_clocks(&mut self, move_mask: u64) {
@@ -327,9 +315,13 @@ impl Board {
     self.white.king | self.black.king
   }
 
-  pub(crate) fn get_piece_moves(&mut self, at_mask: u64) -> u64 {
-    self.update_cache(at_mask);
-    self.cached_moves.all()
+  pub fn get_status(&self) -> u64 {
+    let mut movegen = MoveGen::default(&self);
+    let piece_status = movegen.get_status();
+    let fifty_move = mask_from_bool(self.half_clock > 100);
+
+    let result = (fifty_move & DRAW) | (!fifty_move & piece_status);
+    result
   }
 
   pub fn is_empty(&self, at_mask: u64) -> bool {
@@ -367,7 +359,7 @@ mod tests {
       assert_eq!(board.black.king, 0x00_00_00_00_00_00_00_08);
 
       assert_eq!(board.white_turn, true);
-      assert_eq!(board.status, PLAYING);
+      assert_eq!(board.get_status(), PLAYING);
       assert_eq!(board.clock, 1);
       assert_eq!(board.half_clock, 0);
 
@@ -397,7 +389,7 @@ mod tests {
       assert_eq!(a.black.king, b.black.king);
 
       assert_eq!(a.white_turn, b.white_turn);
-      assert_eq!(a.status, b.status);
+      assert_eq!(a.get_status(), b.get_status());
       assert_eq!(a.clock, b.clock);
       assert_eq!(a.half_clock, b.half_clock);
 

@@ -1,6 +1,3 @@
-//status pin filter check needed?
-use std::mem;
-
 use super::{
   Board, board_movement_trait::BoardMovement, cached_piece_moves::CachedPieceMoves, status::*,
   util_fns::*,
@@ -24,10 +21,10 @@ pub struct MoveGen {
   kings: u64,
 
   en_passant_mask: u64,
-  pub(super) white_short_castle: bool,
-  pub(super) white_long_castle: bool,
-  pub(super) black_short_castle: bool,
-  pub(super) black_long_castle: bool,
+  white_short_castle: bool,
+  white_long_castle: bool,
+  black_short_castle: bool,
+  black_long_castle: bool,
 }
 
 //constructors
@@ -76,7 +73,7 @@ impl MoveGen {
   pub(super) fn cached(board: &Board, at_mask: u64) -> CachedPieceMoves {
     let mut movegen = MoveGen::default(board);
     let pin = movegen.pin_filter(at_mask);
-    let check = movegen.check_filter(at_mask);
+    let check = movegen.check_filter();
     let filter = pin & check;
 
     let mut moves = CachedPieceMoves {
@@ -89,15 +86,12 @@ impl MoveGen {
       rook: movegen.rook(at_mask & movegen.rooks & movegen.ally) & filter,
       queen: movegen.queen(at_mask & movegen.queens & movegen.ally) & filter,
       king_default: movegen.king_default(at_mask & movegen.kings & movegen.ally)
-        & !movegen.king_danger()
-        & filter,
+        & !movegen.king_danger(),
       king_short_castle: movegen.king_short_castle(),
       king_long_castle: movegen.king_long_castle(),
       capturing: 0,
-      status: 0,
     };
     moves.capturing = moves.all() & movegen.enemy;
-    moves.status = movegen.status();
     moves
   }
 }
@@ -381,12 +375,11 @@ impl MoveGen {
     mask_from_bool(pin_path == 0) | pin_path
   }
 
-  fn check_filter(&self, at_mask: u64) -> u64 {
+  fn check_filter(&self) -> u64 {
     let ally_king = self.kings & self.ally;
     let mut filter = 0;
     filter |= self.pawn_capture(ally_king) & (self.pawns & self.enemy);
     filter |= self.knight(ally_king) & (self.knights & self.enemy);
-    filter |= mask_from_bool(at_mask == ally_king);
 
     let directions = [
       (-1, 1, u64::MAX),
@@ -435,17 +428,20 @@ impl MoveGen {
     king_danger
   }
 
-  pub(super) fn status(&mut self) -> u64 {
+  pub fn get_status(&mut self) -> u64 {
+    let filter = self.check_filter();
     let checked = self.king_danger() & (self.kings & self.ally) > 0;
-    let moves = self.pawn_default(self.pawns & self.ally)
-      | self.pawn_advance(self.pawns & self.ally)
-      | self.pawn_capture(self.pawns & self.ally)
-      | self.knight(self.knights & self.ally)
-      | self.bishop((self.queens | self.bishops) & self.ally)
-      | self.rook((self.queens | self.rooks) & self.ally)
-      | self.king_default(self.kings & self.ally)
-      | self.king_short_castle()
+    let danger = self.king_danger();
+    let mut moves = self.pawn_default(self.pawns & self.ally) 
+      | self.pawn_advance(self.pawns & self.ally) 
+      | self.pawn_capture(self.pawns & self.ally) 
+      | self.knight(self.knights & self.ally) 
+      | self.bishop((self.queens | self.bishops) & self.ally) 
+      | self.rook((self.queens | self.rooks) & self.ally) 
+      | self.king_short_castle() 
       | self.king_long_castle();
+
+    moves = moves & filter | (self.king_default(self.kings & self.ally) & !danger);
 
     let no_moves = moves == 0;
     let winner = if_mask(self.white_turn_mask, BLACK_WON, WHITE_WON);
@@ -472,7 +468,7 @@ impl MoveGen {
     let insufficient_material =
       mask_from_bool(king_vs_king || king_minor_vs_king | king_bishop_vs_king_bishop);
 
-    (checkmate & winner) | (insufficient_material | stalemate & DRAW)
+    (checkmate & winner) | ((insufficient_material | stalemate) & DRAW)
   }
 }
 
@@ -480,7 +476,7 @@ impl MoveGen {
 impl MoveGen {
   fn switch_turn(&mut self) {
     self.white_turn_mask = !self.white_turn_mask;
-    mem::swap(&mut self.ally, &mut self.enemy);
+    std::mem::swap(&mut self.ally, &mut self.enemy);
   }
 
   fn empty_is_enemy(&mut self) {
@@ -878,7 +874,7 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let pawn = movegen.pawns & movegen.ally;
-      let filter = movegen.check_filter(pawn);
+      let filter = movegen.check_filter();
 
       assert_eq!(
         movegen.pawn_default(pawn) & filter,
@@ -889,7 +885,7 @@ mod tests {
       movegen.switch_turn();
 
       let pawn = movegen.pawns & movegen.ally;
-      let filter = movegen.check_filter(pawn);
+      let filter = movegen.check_filter();
 
       assert_eq!(
         movegen.pawn_default(pawn) & filter,
@@ -904,7 +900,7 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let pawn = movegen.pawns & movegen.ally;
-      let filter = movegen.pin_filter(pawn) & movegen.check_filter(pawn);
+      let filter = movegen.pin_filter(pawn) & movegen.check_filter();
 
       assert_eq!(movegen.pawn_default(pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(pawn) & filter, 0);
@@ -912,7 +908,7 @@ mod tests {
       movegen.switch_turn();
 
       let pawn = movegen.pawns & movegen.ally;
-      let filter = movegen.pin_filter(pawn) & movegen.check_filter(pawn);
+      let filter = movegen.pin_filter(pawn) & movegen.check_filter();
 
       assert_eq!(movegen.pawn_default(pawn) & filter, 0);
       assert_eq!(movegen.pawn_advance(pawn) & filter, 0);
@@ -1016,14 +1012,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let knight = movegen.knights & movegen.ally;
-      let filter = movegen.check_filter(knight);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.knight(knight) & filter, 0x00_00_44_00_00_00_00_00);
 
       movegen.switch_turn();
 
       let knight = movegen.knights & movegen.ally;
-      let filter = movegen.check_filter(knight);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.knight(knight) & filter, 0x00_00_00_00_00_44_00_00);
     }
@@ -1034,14 +1030,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let knight = 0x20_00_00_00_00_00_00_00;
-      let filter = movegen.pin_filter(knight) & movegen.check_filter(knight);
+      let filter = movegen.pin_filter(knight) & movegen.check_filter();
 
       assert_eq!(movegen.knight(knight) & filter, 0);
 
       movegen.switch_turn();
 
       let knight = 0x00_00_00_00_00_00_00_20;
-      let filter = movegen.pin_filter(knight) & movegen.check_filter(knight);
+      let filter = movegen.pin_filter(knight) & movegen.check_filter();
 
       assert_eq!(movegen.knight(knight) & filter, 0);
     }
@@ -1141,14 +1137,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let bishop = movegen.bishops & movegen.ally;
-      let filter = movegen.check_filter(bishop);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.bishop(bishop) & filter, 0x00_00_28_00_00_00_00_00);
 
       movegen.switch_turn();
 
       let bishop = movegen.bishops & movegen.ally;
-      let filter = movegen.check_filter(bishop);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.bishop(bishop) & filter, 0x00_00_00_00_00_28_00_00);
     }
@@ -1159,14 +1155,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let bishop = 0x20_00_00_00_00_00_00_00;
-      let filter = movegen.pin_filter(bishop) & movegen.check_filter(bishop);
+      let filter = movegen.pin_filter(bishop) & movegen.check_filter();
 
       assert_eq!(movegen.bishop(bishop) & filter, 0);
 
       movegen.switch_turn();
 
       let bishop = 0x00_00_00_00_00_00_00_20;
-      let filter = movegen.pin_filter(bishop) & movegen.check_filter(bishop);
+      let filter = movegen.pin_filter(bishop) & movegen.check_filter();
 
       assert_eq!(movegen.bishop(bishop) & filter, 0);
     }
@@ -1266,14 +1262,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let rook = movegen.rooks & movegen.ally;
-      let filter = movegen.check_filter(rook);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.rook(rook) & filter, 0x00_40_00_00_00_00_00_00);
 
       movegen.switch_turn();
 
       let rook = movegen.rooks & movegen.ally;
-      let filter = movegen.check_filter(rook);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.rook(rook) & filter, 0x00_00_00_00_00_00_40_00);
     }
@@ -1284,14 +1280,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let rook = movegen.rooks & movegen.ally;
-      let filter = movegen.pin_filter(rook) & movegen.check_filter(rook);
+      let filter = movegen.pin_filter(rook) & movegen.check_filter();
 
       assert_eq!(movegen.rook(rook) & filter, 0);
 
       movegen.switch_turn();
 
       let rook = movegen.rooks & movegen.ally;
-      let filter = movegen.pin_filter(rook) & movegen.check_filter(rook);
+      let filter = movegen.pin_filter(rook) & movegen.check_filter();
 
       assert_eq!(movegen.rook(rook) & filter, 0);
     }
@@ -1391,14 +1387,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let queen = movegen.queens & movegen.ally;
-      let filter = movegen.check_filter(queen);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.queen(queen) & filter, 0x00_40_00_00_00_00_00_00);
 
       movegen.switch_turn();
 
       let queen = movegen.queens & movegen.ally;
-      let filter = movegen.check_filter(queen);
+      let filter = movegen.check_filter();
 
       assert_eq!(movegen.queen(queen) & filter, 0x00_00_00_00_00_00_40_00);
     }
@@ -1409,14 +1405,14 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let queen = movegen.queens & movegen.ally;
-      let filter = movegen.pin_filter(queen) & movegen.check_filter(queen);
+      let filter = movegen.pin_filter(queen) & movegen.check_filter();
 
       assert_eq!(movegen.queen(queen) & filter, 0);
 
       movegen.switch_turn();
 
       let queen = movegen.queens & movegen.ally;
-      let filter = movegen.pin_filter(queen) & movegen.check_filter(queen);
+      let filter = movegen.pin_filter(queen) & movegen.check_filter();
 
       assert_eq!(movegen.queen(queen) & filter, 0);
     }
@@ -1541,19 +1537,16 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let king = movegen.kings & movegen.ally;
-      let check_filter = movegen.check_filter(king);
       assert_eq!(
-        movegen.king_default(king) & check_filter & !movegen.king_danger(),
+        movegen.king_default(king) & !movegen.king_danger(),
         0x40_40_00_00_00_00_00_00
       );
 
       movegen.switch_turn();
 
       let king = movegen.kings & movegen.ally;
-      let check_filter = movegen.check_filter(king);
-      assert_eq!(check_filter, u64::MAX);
       assert_eq!(
-        movegen.king_default(king) & check_filter & !movegen.king_danger(),
+        movegen.king_default(king) & !movegen.king_danger(),
         0x02_02_00_00_00_00_00_00
       );
     }
@@ -1564,19 +1557,16 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let king = movegen.kings & movegen.ally;
-      let check_filter = movegen.check_filter(king);
       assert_eq!(
-        movegen.king_default(king) & check_filter & !movegen.king_danger(),
+        movegen.king_default(king) & !movegen.king_danger(),
         0x00_C0_00_00_00_00_00_00
       );
 
       movegen.switch_turn();
 
       let king = movegen.kings & movegen.ally;
-      let check_filter = movegen.check_filter(king);
-      assert_eq!(check_filter, u64::MAX);
       assert_eq!(
-        movegen.king_default(king) & check_filter & !movegen.king_danger(),
+        movegen.king_default(king) & !movegen.king_danger(),
         0x00_00_00_00_00_00_C0_00
       );
     }
@@ -1587,19 +1577,16 @@ mod tests {
       let mut movegen = MoveGen::default(&board);
 
       let king = movegen.kings & movegen.ally;
-      let check_filter = movegen.check_filter(king);
       assert_eq!(
-        movegen.king_default(king) & check_filter & !movegen.king_danger(),
+        movegen.king_default(king) & !movegen.king_danger(),
         0x40_80_00_00_00_00_00_00
       );
 
       movegen.switch_turn();
 
       let king = movegen.kings & movegen.ally;
-      let check_filter = movegen.check_filter(king);
-      assert_eq!(check_filter, u64::MAX);
       assert_eq!(
-        movegen.king_default(king) & check_filter & !movegen.king_danger(),
+        movegen.king_default(king) & !movegen.king_danger(),
         0x00_00_00_00_00_00_80_40
       );
     }

@@ -3,7 +3,7 @@ mod board_assets;
 mod board_position_lookup;
 
 use bevy::{prelude::*, window::PrimaryWindow};
-use board::{Board, move_input::MoveInput};
+use board::{move_input::MoveInput, status::PLAYING, Board};
 use board_assets::{BoardAssets, PieceTag, PromotionTag};
 use board_position_lookup::{CENTER_LOOKUP, X_LOOKUP, Y_LOOKUP};
 
@@ -200,6 +200,10 @@ fn update_state(
               to: 1 << to,
               promotion,
             });
+
+            if board.get_status() != PLAYING {
+              *board = Board::default();
+            }
           }
         }
       }
